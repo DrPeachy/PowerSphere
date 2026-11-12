@@ -667,8 +667,9 @@
           onpointerup={onMainPointerUp}
           onclick={onMainClick}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5.25v13.5M5.25 12h13.5" />
+          <svg class="plus" viewBox="0 0 24 24" aria-hidden="true">
+            <path class="bar v" d="M12 6.5v11" />
+            <path class="bar h" d="M6.5 12h11" />
           </svg>
         </button>
       {:else}
