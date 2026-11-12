@@ -17,7 +17,8 @@
     onNotice: (message: string) => void;
   } = $props();
 
-  let kind = $state<"open-path" | "command" | "bucket">("open-path");
+  let kind = $state<"open-path" | "command" | "bat" | "bucket">("open-path");
+  let args = $state("");
   let label = $state("");
   let target = $state("");
   let shell = $state("powershell");
@@ -53,12 +54,13 @@
       return;
     }
     seededId = item.id;
-    kind = item.type === "command" ? "command" : "open-path";
+    kind = item.type === "command" ? "command" : item.type === "bat" ? "bat" : "open-path";
     label = item.label;
     target = item.target ?? "";
     shell = item.shell ?? "powershell";
     cwd = item.cwd ?? "";
     command = item.command ?? "";
+    args = item.args ?? "";
     icon = item.icon ?? "";
     bucketId = editing?.bucketId ?? bucketId;
     const next: Record<string, "text" | "file"> = {};
@@ -76,6 +78,13 @@
     const selected = await pickPath(true);
     if (selected) {
       cwd = selected;
+    }
+  }
+
+  async function chooseScript() {
+    const selected = await pickPath(false, [{ name: "批处理", extensions: ["bat", "cmd"] }]);
+    if (selected) {
+      target = selected;
     }
   }
 
@@ -102,18 +111,31 @@
       if (!bucketId) {
         throw new Error("先添加一个分组");
       }
+      const iconValue = icon.trim() || undefined;
       const tool =
         kind === "open-path"
-          ? { type: "open-path" as const, label, target, icon: icon.trim() || undefined }
-          : {
-              type: "command" as const,
-              label,
-              shell,
-              cwd: cwd.trim() || undefined,
-              command,
-              icon: icon.trim() || undefined,
-              placeholders: placeholderPayload(),
-            };
+          ? { type: "open-path" as const, label, target, icon: iconValue }
+          : kind === "bat"
+            ? {
+                type: "bat" as const,
+                label,
+                target,
+                cwd: cwd.trim() || undefined,
+                args: args.trim() || undefined,
+                icon: iconValue,
+              }
+            : {
+                type: "command" as const,
+                label,
+                shell,
+                cwd: cwd.trim() || undefined,
+                command,
+                icon: iconValue,
+                placeholders: placeholderPayload(),
+              };
+      if (kind === "bat" && !/\.(bat|cmd)$/i.test(target.trim())) {
+        throw new Error("请选择 .bat 或 .cmd 文件");
+      }
       const next = editing
         ? await updateTool(bucketId, editing.item.id, tool)
         : await addTool(bucketId, tool);
@@ -121,10 +143,13 @@
         label = "";
         target = "";
         command = "";
+        args = "";
         icon = "";
       }
       onChange(next);
-      onNotice(editing ? "已保存" : kind === "open-path" ? "已添加导航" : "已添加指令");
+      onNotice(
+        editing ? "已保存" : kind === "open-path" ? "已添加导航" : kind === "bat" ? "已添加批处理" : "已添加指令",
+      );
       if (editing) {
         onClose();
       }
@@ -165,6 +190,9 @@
     <button type="button" aria-pressed={kind === "command"} onclick={() => (kind = "command")}>
       指令
     </button>
+    <button type="button" aria-pressed={kind === "bat"} onclick={() => (kind = "bat")}>
+      批处理
+    </button>
     <button type="button" aria-pressed={kind === "bucket"} onclick={() => (kind = "bucket")}>
       分组
     </button>
@@ -190,6 +218,25 @@
       <label class="field">
         <span>路径或网址</span>
         <input bind:value={target} placeholder="%USERPROFILE%\Documents 或 https://..." />
+      </label>
+    {:else if kind === "bat"}
+      <label class="field">
+        <span>批处理文件</span>
+        <div class="inline">
+          <input bind:value={target} placeholder="C:\scripts\backup.bat" />
+          <button class="text-button" type="button" onclick={chooseScript}>选择</button>
+        </div>
+      </label>
+      <label class="field">
+        <span>工作目录（可选）</span>
+        <div class="inline">
+          <input bind:value={cwd} placeholder="留空则使用脚本所在文件夹" />
+          <button class="text-button" type="button" onclick={chooseFolder}>选择</button>
+        </div>
+      </label>
+      <label class="field">
+        <span>参数（可选）</span>
+        <input bind:value={args} placeholder="附加在脚本后面，可留空" />
       </label>
     {:else}
       <label class="field">

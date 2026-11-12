@@ -89,7 +89,7 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "label": { "type": "string", "minLength": 1 },
-        "type": { "type": "string", "minLength": 1, "description": "Runner 的 type id，例如 open-path 或 command。" }
+        "type": { "type": "string", "minLength": 1, "description": "Runner 的 type id，例如 open-path、command 或 bat。" }
       },
       "allOf": [
         {
@@ -132,6 +132,31 @@
                 "type": "array",
                 "items": { "$ref": "#/$defs/placeholder" }
               }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "bat" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["target"],
+            "properties": {
+              "target": {
+                "type": "string",
+                "minLength": 1,
+                "description": "要执行的 .bat 或 .cmd。支持 %ENV%。"
+              },
+              "cwd": {
+                "type": ["string", "null"],
+                "description": "可选工作目录。省略则使用脚本所在文件夹。"
+              },
+              "args": {
+                "type": "string",
+                "description": "可选参数，原样接在脚本路径后面。"
+              },
+              "icon": { "type": "string" }
             }
           }
         }

@@ -194,6 +194,17 @@ pub enum NewTool {
         #[serde(default)]
         placeholders: Vec<PlaceholderSpec>,
     },
+    #[serde(rename = "bat")]
+    Bat {
+        label: String,
+        target: String,
+        #[serde(default)]
+        cwd: Option<String>,
+        #[serde(default)]
+        args: Option<String>,
+        #[serde(default)]
+        icon: Option<String>,
+    },
 }
 
 impl AppConfig {
@@ -285,7 +296,9 @@ impl AppConfig {
 impl NewTool {
     pub fn into_item(self) -> Result<ToolItem, ConfigError> {
         let label = match &self {
-            Self::OpenPath { label, .. } | Self::Command { label, .. } => label.trim().to_string(),
+            Self::OpenPath { label, .. }
+            | Self::Command { label, .. }
+            | Self::Bat { label, .. } => label.trim().to_string(),
         };
         if label.is_empty() {
             return Err(ConfigError::Invalid("名称不能为空".into()));
@@ -324,6 +337,34 @@ impl NewTool {
                 insert_icon(&mut params, icon)?;
                 insert_placeholders(&mut params, placeholders)?;
                 ("command", params)
+            }
+            Self::Bat {
+                target,
+                cwd,
+                args,
+                icon,
+                ..
+            } => {
+                let target = target.trim().to_string();
+                if !is_batch_path(&target) {
+                    return Err(ConfigError::Invalid("请选择 .bat 或 .cmd 文件".into()));
+                }
+                let mut params = Map::new();
+                params.insert("target".into(), Value::String(target));
+                if let Some(cwd) = cwd
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                {
+                    params.insert("cwd".into(), Value::String(cwd));
+                }
+                if let Some(args) = args
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                {
+                    params.insert("args".into(), Value::String(args));
+                }
+                insert_icon(&mut params, icon)?;
+                ("bat", params)
             }
         };
         let item = ToolItem {
@@ -475,9 +516,23 @@ fn validate_item(item: &ToolItem) -> Result<(), ConfigError> {
                 )));
             }
         }
+        "bat" => {
+            let target = param_str(item, "target").unwrap_or("");
+            if !is_batch_path(target) {
+                return Err(ConfigError::Invalid(format!(
+                    "bat 需要 .bat 或 .cmd 路径：{}",
+                    item.id
+                )));
+            }
+        }
         _ => {}
     }
     Ok(())
+}
+
+fn is_batch_path(path: &str) -> bool {
+    let lower = path.trim().to_ascii_lowercase();
+    lower.ends_with(".bat") || lower.ends_with(".cmd")
 }
 
 fn insert_icon(params: &mut Map<String, Value>, icon: Option<String>) -> Result<(), ConfigError> {

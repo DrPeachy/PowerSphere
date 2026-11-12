@@ -10,10 +10,12 @@
     runFilled,
     runItem,
     setAnchor,
+    setHitRects,
   } from "./lib/api";
   import {
     choosePlacement,
     computeLayout,
+    hitRects,
     mark,
     metricsFrom,
     pinShift,
@@ -91,12 +93,7 @@
           : null,
   );
   let layout: Layout = $derived(
-    computeLayout(buckets, mode, activeBucketId, panelSize, metrics, placement, {
-      left: work.left - anchor.x,
-      top: work.top - anchor.y,
-      right: work.right - anchor.x,
-      bottom: work.bottom - anchor.y,
-    }),
+    computeLayout(buckets, mode, activeBucketId, panelSize, metrics, placement),
   );
   let origin = $derived(windowOrigin(layout, anchor));
   let editingItem = $derived(findItem(buckets, editor?.bucketId, editor?.itemId));
@@ -155,6 +152,20 @@
         void settleHover();
       }
     });
+  });
+
+  let hitKey = "";
+  $effect(() => {
+    if (!ready || preview) {
+      return;
+    }
+    const rects = hitRects(layout, mode, panelSize !== null);
+    const key = JSON.stringify(rects);
+    if (key === hitKey) {
+      return;
+    }
+    hitKey = key;
+    void setHitRects(rects);
   });
 
   let snapKey = "";

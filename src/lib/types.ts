@@ -25,6 +25,7 @@ export interface ToolItem {
   shell?: string;
   cwd?: string;
   command?: string;
+  args?: string;
   icon?: string;
   placeholders?: PlaceholderSpec[];
 }
@@ -62,6 +63,14 @@ export type NewTool =
       command: string;
       icon?: string;
       placeholders?: PlaceholderSpec[];
+    }
+  | {
+      type: "bat";
+      label: string;
+      target: string;
+      cwd?: string;
+      args?: string;
+      icon?: string;
     };
 
 export interface RunOutput {

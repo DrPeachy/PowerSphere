@@ -186,6 +186,17 @@ export function choosePlacement(
   return { edge, along, inward: inwardDir(edge) };
 }
 
+/** Largest editor. The window always reserves this slot so opening a panel does not move spheres. */
+export const RESERVED_PANEL: PanelSize = { w: 300, h: 600 };
+
+export interface HitRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  round: boolean;
+}
+
 export function computeLayout(
   buckets: Bucket[],
   mode: ClusterMode,
@@ -193,7 +204,6 @@ export function computeLayout(
   panel: PanelSize | null,
   metrics: Metrics,
   placement: Placement,
-  bounds?: { left: number; top: number; right: number; bottom: number },
 ): Layout {
   const child = bucketSize(metrics);
   const action = actionSize(metrics);
@@ -203,6 +213,21 @@ export function computeLayout(
     mode === "actions" && !panel
       ? buckets.find((bucket) => bucket.id === activeBucketId)
       : undefined;
+  const alongFrom = vector(placement.along);
+  const inwardFrom = vector(placement.inward);
+  const entries = [
+    ...buckets.map((bucket) => ({
+      key: `bucket:${bucket.id}`,
+      kind: "bucket" as const,
+      bucketId: bucket.id,
+      label: bucket.name,
+    })),
+    { key: "settings", kind: "settings" as const, bucketId: "settings", label: "设置" },
+  ];
+  const children = entries.map((entry, index) => {
+    const center = childCenter(index, placement.along, metrics.main / 2, child / 2, metrics);
+    return { ...entry, cx: center.x, cy: center.y, size: child };
+  });
   const boxes: Array<SphereNode & { cx: number; cy: number }> = [
     {
       key: "main",
@@ -218,39 +243,28 @@ export function computeLayout(
       cy: 0,
     },
   ];
-
   if (showChildren) {
-    const entries = [
-      ...buckets.map((bucket) => ({
-        key: `bucket:${bucket.id}`,
-        kind: "bucket" as const,
-        bucketId: bucket.id,
-        label: bucket.name,
-      })),
-      { key: "settings", kind: "settings" as const, bucketId: "settings", label: "设置" },
-    ];
-    entries.forEach((entry, index) => {
-      const center = childCenter(index, placement.along, metrics.main / 2, child / 2, metrics);
-      const from = vector(placement.along);
+    for (const entry of children) {
       boxes.push({
-        ...entry,
+        key: entry.key,
+        kind: entry.kind,
+        bucketId: entry.bucketId,
+        label: entry.label,
         left: 0,
         top: 0,
-        size: child,
-        delay: index,
-        fromX: -from.x * 8,
-        fromY: -from.y * 8,
-        cx: center.x,
-        cy: center.y,
+        size: entry.size,
+        delay: boxes.length,
+        fromX: -alongFrom.x * 10,
+        fromY: -alongFrom.y * 10,
+        cx: entry.cx,
+        cy: entry.cy,
       });
-    });
+    }
   }
-
   if (active) {
-    const host = boxes.find((box) => box.bucketId === active.id);
+    const host = children.find((entry) => entry.bucketId === active.id);
     active.items.forEach((item, index) => {
       const delta = childCenter(index, placement.inward, child / 2, action / 2, metrics);
-      const from = vector(placement.inward);
       boxes.push({
         key: `action:${item.id}`,
         kind: "action",
@@ -262,22 +276,24 @@ export function computeLayout(
         top: 0,
         size: action,
         delay: index,
-        fromX: -from.x * 8,
-        fromY: -from.y * 8,
+        fromX: -inwardFrom.x * 10,
+        fromY: -inwardFrom.y * 10,
         cx: (host?.cx ?? 0) + delta.x,
         cy: (host?.cy ?? 0) + delta.y,
       });
     });
   }
 
-  let panelBox: { x: number; y: number; w: number; h: number } | null = null;
-  if (panel) {
-    panelBox = placePanel(placement, metrics.main / 2, metrics.gap, panel.w, panel.h);
-    if (bounds) {
-      panelBox.x = fit(panelBox.x, panelBox.w, bounds.left, bounds.right);
-      panelBox.y = fit(panelBox.y, panelBox.h, bounds.top, bounds.bottom);
-    }
-  }
+  const panelBox = panel
+    ? placePanel(placement, metrics.main / 2, metrics.gap, panel.w, panel.h)
+    : null;
+  const reservedPanel = placePanel(
+    placement,
+    metrics.main / 2,
+    metrics.gap,
+    RESERVED_PANEL.w,
+    RESERVED_PANEL.h,
+  );
 
   let minX = Infinity;
   let minY = Infinity;
@@ -289,17 +305,29 @@ export function computeLayout(
     maxX = Math.max(maxX, right);
     maxY = Math.max(maxY, bottom);
   };
-  for (const box of boxes) {
-    grow(box.cx - box.size / 2, box.cy - box.size / 2, box.cx + box.size / 2, box.cy + box.size / 2);
-    const labelTop = labelAbove ? box.cy - box.size / 2 - metrics.label : box.cy + box.size / 2;
-    const labelBottom = labelTop + metrics.label;
-    if (box.kind !== "main") {
-      grow(box.cx - 40, labelTop, box.cx + 40, labelBottom);
+  const occupy = (cx: number, cy: number, size: number, labeled: boolean) => {
+    grow(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
+    if (!labeled) {
+      return;
+    }
+    const labelTop = labelAbove ? cy - size / 2 - metrics.label : cy + size / 2;
+    grow(cx - 40, labelTop, cx + 40, labelTop + metrics.label);
+  };
+  occupy(0, 0, metrics.main, false);
+  for (const entry of children) {
+    occupy(entry.cx, entry.cy, entry.size, true);
+  }
+  const reach = maxActionCount(buckets);
+  if (reach > 0) {
+    const delta = childCenter(reach - 1, placement.inward, child / 2, action / 2, metrics);
+    for (const entry of children) {
+      if (entry.kind !== "bucket") {
+        continue;
+      }
+      occupy(entry.cx + delta.x, entry.cy + delta.y, action, true);
     }
   }
-  if (panelBox) {
-    grow(panelBox.x, panelBox.y, panelBox.x + panelBox.w, panelBox.y + panelBox.h);
-  }
+  grow(reservedPanel.x, reservedPanel.y, reservedPanel.x + reservedPanel.w, reservedPanel.y + reservedPanel.h);
   minX -= metrics.pad;
   minY -= metrics.pad;
   maxX += metrics.pad;
@@ -336,6 +364,39 @@ export function computeLayout(
       : null,
     labelAbove,
   };
+}
+
+export function hitRects(layout: Layout, mode: ClusterMode, panelOpen: boolean): HitRect[] {
+  const pad = 16;
+  const rects: HitRect[] = [];
+  const main = layout.nodes.find((node) => node.kind === "main");
+  if (main) {
+    rects.push(ellipse(main.left, main.top, main.size, pad));
+  }
+  if (mode !== "idle") {
+    const kids = layout.nodes.filter((node) => node.kind === "bucket" || node.kind === "settings");
+    const box = unionRect(kids, pad);
+    if (box) {
+      rects.push({ ...box, round: false });
+    }
+  }
+  if (mode === "actions") {
+    const actions = layout.nodes.filter((node) => node.kind === "action");
+    const box = unionRect(actions, pad);
+    if (box) {
+      rects.push({ ...box, round: false });
+    }
+  }
+  if (panelOpen && layout.panel) {
+    rects.push({
+      x: layout.panel.left,
+      y: layout.panel.top,
+      w: layout.panel.w,
+      h: layout.panel.h,
+      round: false,
+    });
+  }
+  return rects;
 }
 
 export function windowOrigin(layout: Layout, anchor: Point): Point {
@@ -443,13 +504,30 @@ function vector(dir: Dir): Point {
   }
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
+function ellipse(left: number, top: number, size: number, pad: number): HitRect {
+  return { x: left - pad, y: top - pad, w: size + pad * 2, h: size + pad * 2, round: true };
 }
 
-function fit(value: number, size: number, min: number, max: number): number {
-  if (max - min <= size) {
-    return min;
+function unionRect(
+  nodes: Array<{ left: number; top: number; size: number }>,
+  pad: number,
+): { x: number; y: number; w: number; h: number } | null {
+  if (nodes.length === 0) {
+    return null;
   }
-  return clamp(value, min, max - size);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const node of nodes) {
+    minX = Math.min(minX, node.left - pad);
+    minY = Math.min(minY, node.top - pad - 18);
+    maxX = Math.max(maxX, node.left + node.size + pad);
+    maxY = Math.max(maxY, node.top + node.size + pad + 18);
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

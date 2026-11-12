@@ -163,6 +163,88 @@ pub struct CursorPoint {
     pub y: f64,
 }
 
+#[derive(serde::Deserialize)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub struct HitRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub round: bool,
+}
+
+#[tauri::command]
+pub fn set_hit_rects(window: tauri::WebviewWindow, rects: Vec<HitRect>) -> Result<(), String> {
+    apply_hit_rects(&window, &rects)
+}
+
+fn apply_hit_rects(window: &tauri::WebviewWindow, rects: &[HitRect]) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        apply_hit_rects_windows(window, rects)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, rects);
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn apply_hit_rects_windows(window: &tauri::WebviewWindow, rects: &[HitRect]) -> Result<(), String> {
+    use windows::Win32::Graphics::Gdi::{
+        CombineRgn, CreateEllipticRgn, CreateRectRgn, DeleteObject, RGN_OR, SetWindowRgn,
+    };
+
+    let hwnd = window.hwnd().map_err(|err| err.to_string())?;
+    let scale = window.scale_factor().map_err(|err| err.to_string())?;
+    if !(scale.is_finite() && scale > 0.0) {
+        return Err("缩放无效".into());
+    }
+    let mut region = None;
+    for rect in rects {
+        if !(rect.w.is_finite() && rect.h.is_finite() && rect.w > 0.0 && rect.h > 0.0) {
+            continue;
+        }
+        let left = (rect.x * scale).round() as i32;
+        let top = (rect.y * scale).round() as i32;
+        let right = ((rect.x + rect.w) * scale).round() as i32;
+        let bottom = ((rect.y + rect.h) * scale).round() as i32;
+        let part = unsafe {
+            if rect.round {
+                CreateEllipticRgn(left, top, right, bottom)
+            } else {
+                CreateRectRgn(left, top, right, bottom)
+            }
+        };
+        if part.is_invalid() {
+            continue;
+        }
+        region = Some(match region {
+            None => part,
+            Some(previous) => {
+                unsafe {
+                    CombineRgn(Some(previous), Some(previous), Some(part), RGN_OR);
+                    let _ = DeleteObject(part.into());
+                }
+                previous
+            }
+        });
+    }
+    let Some(region) = region else {
+        return Ok(());
+    };
+    let applied = unsafe { SetWindowRgn(hwnd, Some(region), false) };
+    if applied == 0 {
+        unsafe {
+            let _ = DeleteObject(region.into());
+        }
+        return Err("无法设置点击区域".into());
+    }
+    Ok(())
+}
+
 fn apply_shell_bounds(
     window: &tauri::WebviewWindow,
     x: f64,

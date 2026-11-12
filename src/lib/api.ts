@@ -1,5 +1,13 @@
 import { mergePlaceholders, parseTemplate, substituteCommand } from "./template";
-import type { AppConfig, AppSnapshot, NewTool, PlaceholderSpec, RunOutput, StyleSettings } from "./types";
+import type {
+  AppConfig,
+  AppSnapshot,
+  NewTool,
+  PlaceholderSpec,
+  RunOutput,
+  StyleSettings,
+  ToolItem,
+} from "./types";
 
 const FALLBACK: AppConfig = {
   schemaVersion: 1,
@@ -34,6 +42,13 @@ const FALLBACK: AppConfig = {
           shell: "cmd",
           command: "adb install {apk}",
           placeholders: [{ name: "apk", kind: "file", recent: [] }],
+        },
+        {
+          id: "preview-bat",
+          label: "备份",
+          type: "bat",
+          target: "C:\\Scripts\\backup.bat",
+          args: "",
         },
       ],
     },
@@ -87,14 +102,7 @@ export async function addTool(bucketId: string, tool: NewTool): Promise<AppSnaps
       label: tool.label,
       type: tool.type,
       icon: tool.icon,
-      ...(tool.type === "open-path"
-        ? { target: tool.target }
-        : {
-            shell: tool.shell,
-            cwd: tool.cwd,
-            command: tool.command,
-            placeholders: plainPlaceholders(tool.placeholders),
-          }),
+      ...storedFields(tool),
     });
     return previewSnapshot();
   }
@@ -116,11 +124,13 @@ export async function updateTool(
       label: tool.label,
       type: tool.type,
       icon: tool.icon,
-      target: tool.type === "open-path" ? tool.target : undefined,
-      shell: tool.type === "command" ? tool.shell : undefined,
-      cwd: tool.type === "command" ? tool.cwd : undefined,
-      command: tool.type === "command" ? tool.command : undefined,
-      placeholders: tool.type === "command" ? plainPlaceholders(tool.placeholders) : undefined,
+      target: undefined,
+      shell: undefined,
+      cwd: undefined,
+      command: undefined,
+      args: undefined,
+      placeholders: undefined,
+      ...storedFields(tool),
     });
     return previewSnapshot();
   }
@@ -159,14 +169,21 @@ export async function updateStyle(style: StyleSettings): Promise<AppSnapshot> {
   return invoke<AppSnapshot>("update_style", { style });
 }
 
-export async function pickPath(directory: boolean): Promise<string | null> {
+export async function pickPath(
+  directory: boolean,
+  filters?: { name: string; extensions: string[] }[],
+): Promise<string | null> {
   if (!inTauri()) {
     const value = window.prompt(directory ? "文件夹路径" : "文件路径");
     const trimmed = value?.trim();
     return trimmed ? trimmed : null;
   }
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const selected = await open({ directory, multiple: false });
+  const selected = await open({
+    directory,
+    multiple: false,
+    filters: filters && filters.length > 0 ? filters : undefined,
+  });
   if (selected === null) {
     return null;
   }
@@ -188,6 +205,15 @@ export async function setShellBounds(bounds: {
 
 export async function cursorPosition(): Promise<{ x: number; y: number }> {
   return invoke("cursor_position");
+}
+
+export async function setHitRects(
+  rects: { x: number; y: number; w: number; h: number; round: boolean }[],
+): Promise<void> {
+  if (!inTauri()) {
+    return;
+  }
+  await invoke("set_hit_rects", { rects });
 }
 
 export async function setAnchor(anchor: { x: number; y: number }): Promise<void> {
@@ -233,6 +259,21 @@ export async function runItem(bucketId: string, itemId: string): Promise<RunOutp
     return { message: "预览模式不会真正执行", pid: null };
   }
   return invoke<RunOutput>("run_item", { bucketId, itemId });
+}
+
+function storedFields(tool: NewTool): Partial<ToolItem> {
+  if (tool.type === "open-path") {
+    return { target: tool.target };
+  }
+  if (tool.type === "bat") {
+    return { target: tool.target, cwd: tool.cwd, args: tool.args };
+  }
+  return {
+    shell: tool.shell,
+    cwd: tool.cwd,
+    command: tool.command,
+    placeholders: plainPlaceholders(tool.placeholders),
+  };
 }
 
 function plainPlaceholders(specs: PlaceholderSpec[] | undefined): PlaceholderSpec[] | undefined {
