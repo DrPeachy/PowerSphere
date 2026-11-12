@@ -36,7 +36,7 @@
         "shadow": false,
         "center": false,
         "dragDropEnabled": false,
-        "backgroundThrottling": "throttle"
+        "backgroundThrottling": "disabled"
       }
     ],
     "security": {

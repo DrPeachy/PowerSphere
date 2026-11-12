@@ -43,6 +43,7 @@ pub fn run() {
             commands::run_filled,
             commands::set_anchor,
             commands::set_shell_bounds,
+            commands::cursor_position,
             commands::run_item,
         ])
         .run(tauri::generate_context!())

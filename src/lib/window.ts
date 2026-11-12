@@ -1,9 +1,123 @@
-import { inTauri, setShellBounds } from "./api";
+import { cursorPosition, inTauri, setShellBounds } from "./api";
 import { windowOrigin, type Layout } from "./layout";
 import type { Anchor } from "./types";
 
-let ticket = 0;
-let ignoreMovesUntil = 0;
+interface ShellBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  preserveClient: boolean;
+}
+
+let dragLock = false;
+let suppressMoves = 0;
+let inflight = false;
+let pending: ShellBounds | null = null;
+let applied: ShellBounds | null = null;
+let waiters: Array<() => void> = [];
+
+export function setDragLock(locked: boolean): void {
+  dragLock = locked;
+}
+
+function movesIgnored(): boolean {
+  return dragLock || suppressMoves > 0 || inflight || pending !== null;
+}
+
+function sameBounds(a: ShellBounds, b: ShellBounds): boolean {
+  return (
+    Math.abs(a.x - b.x) < 0.5 &&
+    Math.abs(a.y - b.y) < 0.5 &&
+    Math.abs(a.width - b.width) < 0.5 &&
+    Math.abs(a.height - b.height) < 0.5
+  );
+}
+
+function shellBounds(layout: Layout, anchor: Anchor, preserveClient: boolean): ShellBounds {
+  const origin = windowOrigin(layout, anchor);
+  return {
+    x: origin.x,
+    y: origin.y,
+    width: layout.width,
+    height: layout.height,
+    preserveClient,
+  };
+}
+
+function rememberMove(): void {
+  suppressMoves += 1;
+  setTimeout(() => {
+    suppressMoves = Math.max(0, suppressMoves - 1);
+  }, 80);
+}
+
+function finishWaiters(): void {
+  const done = waiters;
+  waiters = [];
+  for (const resolve of done) {
+    resolve();
+  }
+}
+
+function pump(): void {
+  if (inflight || !pending) {
+    return;
+  }
+  const bounds = pending;
+  pending = null;
+  if (applied && sameBounds(applied, bounds)) {
+    if (pending) {
+      pump();
+      return;
+    }
+    finishWaiters();
+    return;
+  }
+  inflight = true;
+  void setShellBounds(bounds)
+    .catch(() => {})
+    .finally(() => {
+      applied = bounds;
+      inflight = false;
+      rememberMove();
+      if (pending) {
+        pump();
+        return;
+      }
+      finishWaiters();
+    });
+}
+
+/**
+ * Move and resize the shell to the latest layout only.
+ * Older in-flight positions are dropped so a slow IPC cannot snap the sphere backwards.
+ */
+export function syncWindow(layout: Layout, anchor: Anchor, preserveClient = true): Promise<void> {
+  if (!inTauri()) {
+    return Promise.resolve();
+  }
+  const next = shellBounds(layout, anchor, preserveClient);
+  if (applied && sameBounds(applied, next) && !pending && !inflight) {
+    return Promise.resolve();
+  }
+  pending = next;
+  return new Promise((resolve) => {
+    waiters.push(resolve);
+    pump();
+  });
+}
+
+export async function readCursor(): Promise<{ x: number; y: number } | null> {
+  if (!inTauri()) {
+    return null;
+  }
+  try {
+    return await cursorPosition();
+  } catch {
+    return null;
+  }
+}
 
 export async function readWorkArea(): Promise<{
   left: number;
@@ -41,24 +155,6 @@ export async function defaultAnchor(): Promise<Anchor> {
   };
 }
 
-export async function syncWindow(layout: Layout, anchor: Anchor): Promise<void> {
-  if (!inTauri()) {
-    return;
-  }
-  const origin = windowOrigin(layout, anchor);
-  const mine = ++ticket;
-  ignoreMovesUntil = Date.now() + 120;
-  await setShellBounds({
-    x: origin.x,
-    y: origin.y,
-    width: layout.width,
-    height: layout.height,
-  });
-  if (mine === ticket) {
-    ignoreMovesUntil = Date.now() + 80;
-  }
-}
-
 export async function installMoveSaver(
   getLayout: () => Layout,
   anchor: Anchor,
@@ -71,10 +167,13 @@ export async function installMoveSaver(
   const win = getCurrentWindow();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const unlisten = await win.onMoved(async () => {
-    if (Date.now() < ignoreMovesUntil) {
+    if (movesIgnored()) {
       return;
     }
     const position = await win.outerPosition();
+    if (movesIgnored()) {
+      return;
+    }
     const scale = await win.scaleFactor();
     const layout = getLayout();
     const next = {

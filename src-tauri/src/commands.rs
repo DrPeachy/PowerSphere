@@ -129,6 +129,7 @@ pub fn set_shell_bounds(
     y: f64,
     width: f64,
     height: f64,
+    preserve_client: bool,
 ) -> Result<(), String> {
     if !(x.is_finite() && y.is_finite() && width.is_finite() && height.is_finite())
         || width < 1.0
@@ -136,11 +137,30 @@ pub fn set_shell_bounds(
     {
         return Err("窗口尺寸无效".into());
     }
-    apply_shell_bounds(&window, x, y, width, height)?;
+    apply_shell_bounds(&window, x, y, width, height, preserve_client)?;
     if !window.is_visible().unwrap_or(false) {
         window.show().map_err(|err| err.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn cursor_position(window: tauri::WebviewWindow) -> Result<CursorPoint, String> {
+    let pos = window.cursor_position().map_err(|err| err.to_string())?;
+    let scale = window.scale_factor().map_err(|err| err.to_string())?;
+    if !(scale.is_finite() && scale > 0.0 && pos.x.is_finite() && pos.y.is_finite()) {
+        return Err("无法读取光标位置".into());
+    }
+    Ok(CursorPoint {
+        x: pos.x / scale,
+        y: pos.y / scale,
+    })
+}
+
+#[derive(serde::Serialize)]
+pub struct CursorPoint {
+    pub x: f64,
+    pub y: f64,
 }
 
 fn apply_shell_bounds(
@@ -149,13 +169,15 @@ fn apply_shell_bounds(
     y: f64,
     width: f64,
     height: f64,
+    preserve_client: bool,
 ) -> Result<(), String> {
     #[cfg(windows)]
     {
-        apply_bounds_windows(window, x, y, width, height)
+        apply_bounds_windows(window, x, y, width, height, preserve_client)
     }
     #[cfg(not(windows))]
     {
+        let _ = preserve_client;
         window
             .set_position(tauri::LogicalPosition::new(x, y))
             .map_err(|err| err.to_string())?;
@@ -174,14 +196,24 @@ fn apply_bounds_windows(
     y: f64,
     width: f64,
     height: f64,
+    preserve_client: bool,
 ) -> Result<(), String> {
     use tauri::{LogicalPosition, LogicalSize};
-    use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SWP_NOACTIVATE, SWP_NOCOPYBITS, SWP_NOZORDER, SetWindowPos,
+    };
 
     let hwnd = window.hwnd().map_err(|err| err.to_string())?;
     let scale = window.scale_factor().map_err(|err| err.to_string())?;
     let position: tauri::PhysicalPosition<i32> = LogicalPosition::new(x, y).to_physical(scale);
     let size: tauri::PhysicalSize<i32> = LogicalSize::new(width, height).to_physical(scale);
+    // Resizes copy the old client into the new rect, so the sphere appears to jump until the
+    // next paint. Discard those bits only when the size changes; pure drags keep the client.
+    let flags = if preserve_client {
+        SWP_NOZORDER | SWP_NOACTIVATE
+    } else {
+        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS
+    };
     unsafe {
         SetWindowPos(
             hwnd,
@@ -190,7 +222,7 @@ fn apply_bounds_windows(
             position.y,
             size.width,
             size.height,
-            SWP_NOZORDER | SWP_NOACTIVATE,
+            flags,
         )
         .map_err(|err| err.to_string())?;
     }

@@ -98,6 +98,12 @@ button {
   cursor: grabbing;
 }
 
+.stage.dragging .sphere.main,
+.stage.holding .sphere.main {
+  transition: none;
+  transform: none;
+}
+
 .sphere svg {
   width: 46%;
   height: 46%;

@@ -340,8 +340,22 @@ export function computeLayout(
 
 export function windowOrigin(layout: Layout, anchor: Point): Point {
   return {
-    x: Math.round(anchor.x - layout.mainCx),
-    y: Math.round(anchor.y - layout.mainCy),
+    x: anchor.x - layout.mainCx,
+    y: anchor.y - layout.mainCy,
+  };
+}
+
+/** Keeps the main sphere visually still while its CSS position changes and the window has not caught up. */
+export function pinShift(
+  previous: { mainCx: number; mainCy: number } | null,
+  next: { mainCx: number; mainCy: number },
+): { x: number; y: number } {
+  if (!previous) {
+    return { x: 0, y: 0 };
+  }
+  return {
+    x: previous.mainCx - next.mainCx,
+    y: previous.mainCy - next.mainCy,
   };
 }
 

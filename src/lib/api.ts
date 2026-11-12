@@ -178,11 +178,16 @@ export async function setShellBounds(bounds: {
   y: number;
   width: number;
   height: number;
+  preserveClient: boolean;
 }): Promise<void> {
   if (!inTauri()) {
     return;
   }
-  await invoke("set_shell_bounds", bounds);
+  await invoke("set_shell_bounds", { ...bounds });
+}
+
+export async function cursorPosition(): Promise<{ x: number; y: number }> {
+  return invoke("cursor_position");
 }
 
 export async function setAnchor(anchor: { x: number; y: number }): Promise<void> {
