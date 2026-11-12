@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod autostart;
 mod commands;
@@ -37,6 +37,7 @@ pub fn run() {
             commands::remove_tool,
             commands::update_settings,
             commands::set_anchor,
+            commands::set_shell_bounds,
             commands::run_item,
         ])
         .run(tauri::generate_context!())

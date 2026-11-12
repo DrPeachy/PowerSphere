@@ -1,23 +1,43 @@
-import { inTauri } from "./api";
-import type { Layout } from "./layout";
+import { inTauri, setShellBounds } from "./api";
+import { windowOrigin, type Layout } from "./layout";
 import type { Anchor } from "./types";
 
-let programmaticMoves = 0;
+let ticket = 0;
+let ignoreMovesUntil = 0;
 
-export async function defaultAnchor(): Promise<Anchor> {
+export async function readWorkArea(): Promise<{
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+} | null> {
+  if (!inTauri()) {
+    return null;
+  }
   const { currentMonitor, primaryMonitor } = await import("@tauri-apps/api/window");
   const monitor = (await currentMonitor()) ?? (await primaryMonitor());
   if (!monitor) {
-    return { x: 180, y: 220 };
+    return null;
   }
   const scale = monitor.scaleFactor || 1;
   const left = monitor.workArea.position.x / scale;
   const top = monitor.workArea.position.y / scale;
-  const width = monitor.workArea.size.width / scale;
-  const height = monitor.workArea.size.height / scale;
   return {
-    x: left + width - 72,
-    y: top + height / 2,
+    left,
+    top,
+    right: left + monitor.workArea.size.width / scale,
+    bottom: top + monitor.workArea.size.height / scale,
+  };
+}
+
+export async function defaultAnchor(): Promise<Anchor> {
+  const area = await readWorkArea();
+  if (!area) {
+    return { x: 180, y: 220 };
+  }
+  return {
+    x: area.right - 80,
+    y: (area.top + area.bottom) / 2,
   };
 }
 
@@ -25,37 +45,24 @@ export async function syncWindow(layout: Layout, anchor: Anchor): Promise<void> 
   if (!inTauri()) {
     return;
   }
-  const { currentMonitor, getCurrentWindow, LogicalPosition, LogicalSize, primaryMonitor } =
-    await import("@tauri-apps/api/window");
-  const win = getCurrentWindow();
-  let x = anchor.x - layout.main.cx;
-  let y = anchor.y - layout.main.cy;
-  const monitor = (await currentMonitor()) ?? (await primaryMonitor());
-  if (monitor) {
-    const scale = monitor.scaleFactor || 1;
-    const left = monitor.workArea.position.x / scale;
-    const top = monitor.workArea.position.y / scale;
-    const right = left + monitor.workArea.size.width / scale;
-    const bottom = top + monitor.workArea.size.height / scale;
-    x = clamp(x, left, Math.max(left, right - layout.width));
-    y = clamp(y, top, Math.max(top, bottom - layout.height));
-  }
-  programmaticMoves += 1;
-  try {
-    await win.setPosition(new LogicalPosition(Math.round(x), Math.round(y)));
-    await win.setSize(new LogicalSize(layout.width, layout.height));
-    await win.show();
-  } finally {
-    window.setTimeout(() => {
-      programmaticMoves = Math.max(0, programmaticMoves - 1);
-    }, 180);
+  const origin = windowOrigin(layout, anchor);
+  const mine = ++ticket;
+  ignoreMovesUntil = Date.now() + 120;
+  await setShellBounds({
+    x: origin.x,
+    y: origin.y,
+    width: layout.width,
+    height: layout.height,
+  });
+  if (mine === ticket) {
+    ignoreMovesUntil = Date.now() + 80;
   }
 }
 
 export async function installMoveSaver(
   getLayout: () => Layout,
   anchor: Anchor,
-  save: (anchor: Anchor) => Promise<void>,
+  save: (next: Anchor) => Promise<void>,
 ): Promise<() => void> {
   if (!inTauri()) {
     return () => {};
@@ -64,20 +71,27 @@ export async function installMoveSaver(
   const win = getCurrentWindow();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const unlisten = await win.onMoved(async () => {
-    if (programmaticMoves > 0) {
+    if (Date.now() < ignoreMovesUntil) {
       return;
     }
     const position = await win.outerPosition();
     const scale = await win.scaleFactor();
     const layout = getLayout();
-    anchor.x = position.x / scale + layout.main.cx;
-    anchor.y = position.y / scale + layout.main.cy;
+    const next = {
+      x: position.x / scale + layout.mainCx,
+      y: position.y / scale + layout.mainCy,
+    };
+    if (Math.hypot(next.x - anchor.x, next.y - anchor.y) < 1.5) {
+      return;
+    }
+    anchor.x = next.x;
+    anchor.y = next.y;
     if (timer) {
       clearTimeout(timer);
     }
-    const next = { x: anchor.x, y: anchor.y };
+    const saved = { x: anchor.x, y: anchor.y };
     timer = setTimeout(() => {
-      void save(next).catch(() => {});
+      void save(saved).catch(() => {});
     }, 280);
   });
   return () => {
@@ -86,8 +100,4 @@ export async function installMoveSaver(
     }
     unlisten();
   };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }

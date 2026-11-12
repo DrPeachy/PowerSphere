@@ -92,6 +92,81 @@ pub fn update_settings(
 }
 
 #[tauri::command]
+pub fn set_shell_bounds(
+    window: tauri::WebviewWindow,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    if !(x.is_finite() && y.is_finite() && width.is_finite() && height.is_finite())
+        || width < 1.0
+        || height < 1.0
+    {
+        return Err("窗口尺寸无效".into());
+    }
+    apply_shell_bounds(&window, x, y, width, height)?;
+    if !window.is_visible().unwrap_or(false) {
+        window.show().map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+fn apply_shell_bounds(
+    window: &tauri::WebviewWindow,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        apply_bounds_windows(window, x, y, width, height)
+    }
+    #[cfg(not(windows))]
+    {
+        window
+            .set_position(tauri::LogicalPosition::new(x, y))
+            .map_err(|err| err.to_string())?;
+        window
+            .set_size(tauri::LogicalSize::new(width, height))
+            .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn apply_bounds_windows(
+    window: &tauri::WebviewWindow,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    use tauri::{LogicalPosition, LogicalSize};
+    use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos};
+
+    let hwnd = window.hwnd().map_err(|err| err.to_string())?;
+    let scale = window.scale_factor().map_err(|err| err.to_string())?;
+    let position: tauri::PhysicalPosition<i32> = LogicalPosition::new(x, y).to_physical(scale);
+    let size: tauri::PhysicalSize<i32> = LogicalSize::new(width, height).to_physical(scale);
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            position.x,
+            position.y,
+            size.width,
+            size.height,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        )
+        .map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn set_anchor(state: State<'_, AppState>, x: f64, y: f64) -> Result<(), String> {
     if !x.is_finite() || !y.is_finite() {
         return Err("坐标无效".into());

@@ -1,8 +1,15 @@
 :root {
   color-scheme: dark;
-  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 13px;
-  line-height: 1.4;
+  font-weight: 450;
+  line-height: 1.35;
+  --glass: rgba(44, 44, 46, 0.62);
+  --glass-strong: rgba(36, 36, 38, 0.78);
+  --line: rgba(255, 255, 255, 0.22);
+  --ink: #f5f5f7;
+  --blue: #0a84ff;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html,
@@ -17,10 +24,8 @@ body,
 
 body.preview {
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18), transparent 28%),
-    linear-gradient(160deg, #9aab9d, #6e7f78 55%, #556861);
-  display: grid;
-  place-items: center;
+    linear-gradient(165deg, #d5d8df 0%, #b7c0c8 42%, #9aa6b2 100%);
+  min-height: 100vh;
 }
 
 button,
@@ -38,81 +43,113 @@ button {
 .stage {
   position: relative;
   user-select: none;
+  touch-action: none;
+}
+
+.stage.preview {
+  position: fixed;
+}
+
+.orb {
+  position: absolute;
+  z-index: 2;
+  overflow: visible;
+}
+
+.orb.main {
+  z-index: 4;
+}
+
+.orb:not(.main) {
+  animation: sphere-in 220ms var(--ease) backwards;
+}
+
+.orb.dim {
+  opacity: 0.38;
 }
 
 .sphere {
   position: absolute;
-  box-sizing: border-box;
+  inset: 0;
+  display: grid;
+  place-items: center;
   padding: 0;
+  border: 0.5px solid var(--line);
   border-radius: 50%;
-  border: 1px solid rgba(255, 220, 180, 0.55);
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 236, 214, 0.7), transparent 34%),
-    radial-gradient(circle at 50% 62%, #8a5a38 0%, #3a2618 58%, #160f0b 100%);
+  background: var(--glass);
   box-shadow:
-    inset 0 -7px 10px rgba(0, 0, 0, 0.35),
-    0 8px 14px rgba(0, 0, 0, 0.28);
-  color: #fff6ea;
+    0 10px 24px rgba(0, 0, 0, 0.18),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  color: var(--ink);
+  transition:
+    transform 180ms var(--ease),
+    opacity 160ms ease,
+    background 160ms ease;
 }
 
 .sphere.main {
   cursor: grab;
+  background: rgba(58, 58, 60, 0.72);
 }
 
-.sphere.bucket {
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 244, 230, 0.55), transparent 36%),
-    radial-gradient(circle at 50% 60%, #6d84a0 0%, #2c3b4d 62%, #141920 100%);
+.stage.dragging .sphere.main {
+  cursor: grabbing;
 }
 
-.sphere.action {
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 236, 214, 0.45), transparent 36%),
-    radial-gradient(circle at 50% 60%, #c4844a 0%, #6a3d22 60%, #24150e 100%);
+.sphere.main svg {
+  width: 46%;
+  height: 46%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.glyph {
+  font-size: 15px;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+}
+
+.sphere:hover {
+  transform: scale(1.06);
+}
+
+.orb.focused .sphere {
+  transform: scale(1.05);
+  background: rgba(72, 72, 74, 0.82);
+}
+
+.orb.focused .sphere:hover {
+  transform: scale(1.08);
+}
+
+.sphere:active {
+  transform: scale(0.94);
 }
 
 .sphere:focus-visible,
-.plus:focus-visible,
 .panel button:focus-visible,
 .panel input:focus-visible,
 .panel textarea:focus-visible,
 .panel select:focus-visible {
-  outline: 2px solid #ffd7a8;
+  outline: 2px solid var(--blue);
   outline-offset: 2px;
-}
-
-.plus {
-  position: absolute;
-  inset: 16%;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: #fff4e4;
-}
-
-.plus svg {
-  width: 58%;
-  height: 58%;
-  fill: currentColor;
-}
-
-.mark {
-  font-size: 15px;
-  font-weight: 650;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 .caption {
   position: absolute;
-  width: 88px;
-  transform: translate(-50%, 1px);
+  top: calc(100% + 2px);
+  left: 50%;
+  width: 76px;
+  transform: translateX(-50%);
   text-align: center;
   font-size: 11px;
-  color: #fff8ef;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  font-weight: 500;
+  color: #f5f5f7;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   pointer-events: none;
   white-space: nowrap;
   overflow: hidden;
@@ -121,31 +158,44 @@ button {
 
 .notice {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  z-index: 5;
+  top: 8px;
+  max-width: 180px;
   margin: 0;
-  padding: 3px 8px;
+  padding: 4px 10px;
+  border: 0.5px solid var(--line);
   border-radius: 999px;
-  background: rgba(22, 14, 10, 0.88);
-  color: #fff4e4;
+  background: var(--glass-strong);
+  backdrop-filter: blur(16px);
+  color: var(--ink);
   font-size: 11px;
   text-align: center;
   pointer-events: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  animation: fade-in 180ms var(--ease) backwards;
+}
+
+.notice:not(.far) {
+  top: auto;
+  bottom: 8px;
 }
 
 .panel {
   position: absolute;
+  z-index: 5;
   box-sizing: border-box;
   overflow: auto;
-  padding: 12px 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(240, 176, 112, 0.45);
-  background: rgba(28, 21, 16, 0.94);
-  color: #f6efe6;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
+  padding: 14px 14px 16px;
+  border-radius: 20px;
+  border: 0.5px solid var(--line);
+  background: rgba(28, 28, 30, 0.78);
+  color: var(--ink);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  animation: sphere-in 200ms var(--ease) backwards;
 }
 
 .panel h2,
@@ -165,10 +215,10 @@ button {
 .icon-button,
 .text-button,
 .primary {
-  border-radius: 8px;
-  border: 1px solid rgba(240, 176, 112, 0.4);
-  background: #2a1d15;
-  color: #fff4e4;
+  border-radius: 10px;
+  border: 0.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
 }
 
 .icon-button,
@@ -179,8 +229,11 @@ button {
 .primary {
   width: 100%;
   margin-top: 8px;
-  padding: 7px 10px;
-  background: #8a5430;
+  padding: 8px 10px;
+  border: none;
+  background: var(--blue);
+  color: white;
+  font-weight: 560;
 }
 
 .primary:disabled {
@@ -197,14 +250,13 @@ button {
 
 .modes button {
   border-radius: 999px;
-  border: 1px solid rgba(240, 176, 112, 0.35);
-  background: transparent;
-  padding: 4px 0;
+  border: 0.5px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 5px 0;
 }
 
 .modes button[aria-pressed="true"] {
-  background: #8a5430;
-  border-color: transparent;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .field {
@@ -214,7 +266,7 @@ button {
 }
 
 .field span {
-  color: #e7d3bf;
+  color: rgba(235, 235, 245, 0.7);
   font-size: 12px;
 }
 
@@ -223,10 +275,14 @@ textarea,
 select {
   width: 100%;
   box-sizing: border-box;
-  border-radius: 8px;
-  border: 1px solid rgba(240, 176, 112, 0.35);
-  background: #120e0b;
-  padding: 6px 8px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  padding: 7px 8px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--blue);
 }
 
 textarea {
@@ -249,13 +305,13 @@ textarea {
 .error,
 .path {
   margin: 4px 0 8px;
-  color: #d9c2ae;
+  color: rgba(235, 235, 245, 0.62);
   font-size: 11px;
   word-break: break-all;
 }
 
 .error {
-  color: #ffb4a2;
+  color: #ff9f8a;
 }
 
 .tools {
@@ -281,5 +337,34 @@ textarea {
 .settings {
   margin-top: 12px;
   padding-top: 8px;
-  border-top: 1px solid rgba(240, 176, 112, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sphere-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.94);
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .sphere,
+  .panel,
+  .notice {
+    animation: none;
+    transition: none;
+  }
 }

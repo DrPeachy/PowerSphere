@@ -21,6 +21,9 @@ tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-opener = "2"
 
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
 [profile.release]
 codegen-units = 1
 lto = true

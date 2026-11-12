@@ -90,6 +90,18 @@ export async function updateSettings(settings: {
   return invoke<AppSnapshot>("update_settings", { settings });
 }
 
+export async function setShellBounds(bounds: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): Promise<void> {
+  if (!inTauri()) {
+    return;
+  }
+  await invoke("set_shell_bounds", bounds);
+}
+
 export async function setAnchor(anchor: { x: number; y: number }): Promise<void> {
   if (!inTauri()) {
     preview.anchor = anchor;
