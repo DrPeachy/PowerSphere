@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AddPanel from "./lib/AddPanel.svelte";
+  import FillPanel from "./lib/FillPanel.svelte";
+  import SettingsPanel from "./lib/SettingsPanel.svelte";
   import {
     getSnapshot,
     inTauri,
     messageFrom,
+    runFilled,
     runItem,
     setAnchor,
   } from "./lib/api";
@@ -12,14 +15,16 @@
     choosePlacement,
     computeLayout,
     mark,
-    maxActionCount,
+    metricsFrom,
+    snapAnchor,
     windowOrigin,
     type ClusterMode,
     type Layout,
     type Placement,
     type WorkArea,
   } from "./lib/layout";
-  import type { AppSnapshot, Bucket } from "./lib/types";
+  import { mergePlaceholders, parseTemplate } from "./lib/template";
+  import type { AppSnapshot, Bucket, ToolItem } from "./lib/types";
   import { defaultAnchor, installMoveSaver, readWorkArea, syncWindow } from "./lib/window";
 
   const fallbackBuckets: Bucket[] = [
@@ -32,7 +37,9 @@
   let snapshot = $state<AppSnapshot | null>(null);
   let mode = $state<ClusterMode>("idle");
   let activeBucketId = $state<string | null>(null);
-  let panelOpen = $state(false);
+  let editor = $state<{ bucketId: string; itemId?: string } | null>(null);
+  let fill = $state<{ bucketId: string; itemId: string } | null>(null);
+  let settingsOpen = $state(false);
   let notice = $state<string | null>(null);
   let ready = $state(false);
   let pointerInside = false;
@@ -57,20 +64,69 @@
   let suppressClick = false;
 
   let buckets = $derived(snapshot?.config.buckets ?? fallbackBuckets);
+  let metrics = $derived(metricsFrom(snapshot?.config.style));
   let placement = $derived(
-    lockedPlacement ??
-      choosePlacement(anchor, work, buckets.length, maxActionCount(buckets)),
+    lockedPlacement ?? choosePlacement(anchor, work, buckets.length + 1, metrics),
+  );
+  let panelSize = $derived(
+    settingsOpen
+      ? { w: 300, h: 470 }
+      : fill
+        ? { w: 280, h: 320 }
+        : editor
+          ? { w: 300, h: 600 }
+          : null,
   );
   let layout: Layout = $derived(
-    computeLayout(buckets, mode, activeBucketId, panelOpen, notice !== null, placement),
+    computeLayout(buckets, mode, activeBucketId, panelSize, metrics, placement, {
+      left: work.left - anchor.x,
+      top: work.top - anchor.y,
+      right: work.right - anchor.x,
+      bottom: work.bottom - anchor.y,
+    }),
   );
   let origin = $derived(windowOrigin(layout, anchor));
+  let editingItem = $derived(findItem(buckets, editor?.bucketId, editor?.itemId));
+  let fillItem = $derived(findItem(buckets, fill?.bucketId, fill?.itemId));
+  let noticePos = $derived.by(() => {
+    const gap = 8;
+    const radius = metrics.main / 2;
+    if (placement.along === "up") {
+      return { left: layout.mainCx, top: layout.mainCy + radius + gap, transform: "translate(-50%, 0)" };
+    }
+    if (placement.along === "down") {
+      return { left: layout.mainCx, top: layout.mainCy - radius - gap, transform: "translate(-50%, -100%)" };
+    }
+    if (placement.along === "left") {
+      return { left: layout.mainCx + radius + gap, top: layout.mainCy, transform: "translate(0, -50%)" };
+    }
+    return { left: layout.mainCx - radius - gap, top: layout.mainCy, transform: "translate(-100%, -50%)" };
+  });
 
   $effect(() => {
     if (!ready || preview) {
       return;
     }
     void syncWindow(layout, anchor);
+  });
+
+  let snapKey = "";
+  $effect(() => {
+    const key = `${metrics.snapInset}:${metrics.main}:${work.left}:${work.top}:${work.right}:${work.bottom}`;
+    if (!ready || dragging) {
+      return;
+    }
+    if (snapKey === key) {
+      return;
+    }
+    snapKey = key;
+    const snapped = snapAnchor(anchor, work, metrics.snapInset, metrics.main / 2);
+    if (Math.abs(snapped.x - anchor.x) < 0.5 && Math.abs(snapped.y - anchor.y) < 0.5) {
+      return;
+    }
+    anchor.x = snapped.x;
+    anchor.y = snapped.y;
+    void setAnchor({ x: anchor.x, y: anchor.y }).catch(() => {});
   });
 
   onMount(() => {
@@ -81,6 +137,9 @@
       work = viewportWork();
       anchor.x = Math.max(120, window.innerWidth - 88);
       anchor.y = window.innerHeight / 2;
+      const snapped = snapAnchor(anchor, work, metrics.snapInset, metrics.main / 2);
+      anchor.x = snapped.x;
+      anchor.y = snapped.y;
       void getSnapshot().then((next) => {
         snapshot = next;
       });
@@ -113,8 +172,11 @@
           const initial = await defaultAnchor();
           anchor.x = initial.x;
           anchor.y = initial.y;
-          await setAnchor(initial);
         }
+        const snapped = snapAnchor(anchor, work, metrics.snapInset, metrics.main / 2);
+        anchor.x = snapped.x;
+        anchor.y = snapped.y;
+        await setAnchor({ x: anchor.x, y: anchor.y });
       } catch (cause) {
         showNotice(messageFrom(cause));
       } finally {
@@ -183,7 +245,7 @@
 
   function scheduleCollapse() {
     pointerInside = false;
-    if (panelOpen || dragging) {
+    if (editor || settingsOpen || fill || dragging) {
       return;
     }
     if (collapseTimer) {
@@ -213,8 +275,10 @@
     mode = "actions";
   }
 
-  function closePanel() {
-    panelOpen = false;
+  function closePanels() {
+    editor = null;
+    fill = null;
+    settingsOpen = false;
     if (!pointerInside) {
       mode = "idle";
       activeBucketId = null;
@@ -222,14 +286,29 @@
   }
 
   function togglePanel() {
-    panelOpen = !panelOpen;
-    if (panelOpen) {
-      activeBucketId = null;
-      mode = "buckets";
-    } else if (!pointerInside) {
-      mode = "idle";
-      activeBucketId = null;
+    if (editor) {
+      closePanels();
+      return;
     }
+    settingsOpen = false;
+    fill = null;
+    editor = { bucketId: buckets[0]?.id ?? "" };
+    activeBucketId = null;
+    mode = "buckets";
+  }
+
+  function openSettings() {
+    editor = null;
+    fill = null;
+    settingsOpen = true;
+    mode = "buckets";
+  }
+
+  function openEditor(bucketId: string, itemId: string) {
+    fill = null;
+    settingsOpen = false;
+    editor = { bucketId, itemId };
+    mode = "buckets";
   }
 
   function onMainPointerDown(event: PointerEvent) {
@@ -289,17 +368,22 @@
     lockedPlacement = null;
     if (moved) {
       suppressClick = true;
-      const next = { x: anchor.x, y: anchor.y };
-      void setAnchor(next).catch(() => {});
-      if (!preview) {
-        void readWorkArea().then((area) => {
-          if (area) {
-            work = area;
-          }
-        });
-      }
-      return;
+      void finishDrag();
     }
+  }
+
+  async function finishDrag() {
+    if (!preview) {
+      const area = await readWorkArea();
+      if (area) {
+        work = area;
+      }
+    }
+    const snapped = snapAnchor(anchor, work, metrics.snapInset, metrics.main / 2);
+    anchor.x = snapped.x;
+    anchor.y = snapped.y;
+    lockedPlacement = null;
+    await setAnchor({ x: anchor.x, y: anchor.y }).catch(() => {});
   }
 
   function onMainClick() {
@@ -310,7 +394,19 @@
     togglePanel();
   }
 
+  function findOwned(bucketId: string, itemId: string): ToolItem | undefined {
+    return findItem(buckets, bucketId, itemId);
+  }
+
   async function activate(bucketId: string, itemId: string) {
+    const item = findOwned(bucketId, itemId);
+    if (item?.type === "command" && parseTemplate(item.command ?? "").length > 0) {
+      editor = null;
+      settingsOpen = false;
+      fill = { bucketId, itemId };
+      mode = "buckets";
+      return;
+    }
     try {
       const result = await runItem(bucketId, itemId);
       showNotice(result.message);
@@ -319,16 +415,37 @@
     }
   }
 
+  async function runPrompt(values: Record<string, string>) {
+    if (!fill) {
+      return;
+    }
+    const result = await runFilled(fill.bucketId, fill.itemId, values);
+    fill = null;
+    showNotice(result.message);
+  }
+
   function onKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape" && panelOpen) {
-      closePanel();
+    if (event.key === "Escape" && (editor || settingsOpen || fill)) {
+      closePanels();
     }
   }
 
-  function pinStyle(insetX: number, insetY: number, width: number, height: number): string {
-    const x = layout.pinX === "right" ? `right:${insetX}px;left:auto;` : `left:${insetX}px;right:auto;`;
-    const y = layout.pinY === "bottom" ? `bottom:${insetY}px;top:auto;` : `top:${insetY}px;bottom:auto;`;
-    return `${x}${y}width:${width}px;height:${height}px;`;
+  function onStagePointerDown(event: PointerEvent) {
+    if (!fill) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(".panel") || target?.closest(".orb.action")) {
+      return;
+    }
+    fill = null;
+  }
+
+  function findItem(list: Bucket[], bucketId?: string, itemId?: string): ToolItem | undefined {
+    if (!bucketId || !itemId) {
+      return undefined;
+    }
+    return list.find((bucket) => bucket.id === bucketId)?.items.find((item) => item.id === itemId);
   }
 </script>
 
@@ -342,28 +459,38 @@
   style:height="{layout.height}px"
   style:left="{preview ? `${origin.x}px` : '0px'}"
   style:top="{preview ? `${origin.y}px` : '0px'}"
+  style:--motion="{metrics.animationMs}ms"
+  style:--dim="{metrics.unfocusedOpacity}"
+  onpointerdown={onStagePointerDown}
   onpointerenter={cancelCollapse}
   onpointerleave={scheduleCollapse}
   oncontextmenu={(event) => event.preventDefault()}
 >
   {#each layout.nodes as node (node.key)}
-    {@const focused = node.kind === "bucket" && node.bucketId === activeBucketId}
-    {@const dim = node.kind === "bucket" && activeBucketId !== null && node.bucketId !== activeBucketId}
+    {@const focused =
+      (node.kind === "bucket" || node.kind === "settings") && node.bucketId === activeBucketId}
+    {@const dim =
+      (node.kind === "bucket" || node.kind === "settings") &&
+      activeBucketId !== null &&
+      node.bucketId !== activeBucketId}
     <div
       class="orb {node.kind}"
       class:dim
       class:focused
-      style={pinStyle(node.insetX, node.insetY, node.size, node.size)}
+      style:left="{node.left}px"
+      style:top="{node.top}px"
+      style:width="{node.size}px"
+      style:height="{node.size}px"
       style:--dx="{node.fromX}px"
       style:--dy="{node.fromY}px"
-      style:animation-delay="{node.delay * 32}ms"
+      style:animation-delay="{node.delay * 28}ms"
     >
       {#if node.kind === "main"}
         <button
           class="sphere main"
           type="button"
           aria-label="添加工具"
-          aria-pressed={panelOpen}
+          aria-pressed={editor !== null}
           onpointerenter={showBuckets}
           onpointerdown={onMainPointerDown}
           onpointermove={onMainPointerMove}
@@ -381,45 +508,69 @@
           title={node.label}
           aria-label={node.label}
           onpointerenter={() => {
-            if (node.kind === "bucket" && node.bucketId) {
+            if (node.bucketId) {
               showActions(node.bucketId);
             }
           }}
           onclick={() => {
-            if (node.kind === "action" && node.bucketId && node.itemId) {
+            if (node.kind === "settings") {
+              openSettings();
+            } else if (node.kind === "action" && node.bucketId && node.itemId) {
               void activate(node.bucketId, node.itemId);
             }
           }}
+          oncontextmenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (node.kind === "action" && node.bucketId && node.itemId) {
+              openEditor(node.bucketId, node.itemId);
+            }
+          }}
         >
-          <span class="glyph">{mark(node.label)}</span>
+          {#if node.kind === "settings"}
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6.2 6.2l1.6 1.6M16.2 16.2l1.6 1.6M17.8 6.2l-1.6 1.6M7.8 16.2l-1.6 1.6" />
+            </svg>
+          {:else}
+            <span class="glyph">{node.icon || mark(node.label)}</span>
+          {/if}
         </button>
-        <span class="caption">{node.label}</span>
+        <span class="caption" class:above={layout.labelAbove}>{node.label}</span>
       {/if}
     </div>
   {/each}
 
   {#if notice}
-    <p
-      class="notice"
-      class:far={layout.pinY === "bottom"}
-      style:right={layout.pinX === "right" ? `${16 + 32}px` : "auto"}
-      style:left={layout.pinX === "left" ? `${16 + 32}px` : "auto"}
-    >
-      {notice}
-    </p>
+    <p class="notice" style:left="{noticePos.left}px" style:top="{noticePos.top}px" style:transform={noticePos.transform}>{notice}</p>
   {/if}
 
-  {#if panelOpen && layout.panel && snapshot}
+  {#if layout.panel && snapshot}
     <div
       class="panel"
-      style={pinStyle(layout.panel.insetX, layout.panel.insetY, layout.panel.w, layout.panel.h)}
+      style:left="{layout.panel.left}px"
+      style:top="{layout.panel.top}px"
+      style:width="{layout.panel.w}px"
+      style:height="{layout.panel.h}px"
     >
-      <AddPanel
-        {snapshot}
-        onClose={closePanel}
-        onChange={(next) => (snapshot = next)}
-        onNotice={showNotice}
-      />
+      {#if settingsOpen}
+        <SettingsPanel {snapshot} onClose={closePanels} onChange={(next) => (snapshot = next)} />
+      {:else if fill && fillItem}
+        <FillPanel
+          item={fillItem}
+          specs={mergePlaceholders(fillItem.command ?? "", fillItem.placeholders)}
+          onRun={runPrompt}
+          onClose={closePanels}
+        />
+      {:else if editor}
+        <AddPanel
+          {snapshot}
+          editing={editingItem ? { bucketId: editor.bucketId, item: editingItem } : null}
+          onClose={closePanels}
+          onChange={(next) => (snapshot = next)}
+          onNotice={showNotice}
+        />
+      {/if}
     </div>
   {/if}
 </main>

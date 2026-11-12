@@ -9,6 +9,7 @@ mod plugins;
 mod runner;
 mod runners;
 mod state;
+mod template;
 mod tray;
 
 use std::error::Error;
@@ -26,6 +27,7 @@ pub fn run() {
             Some(vec![]),
         ))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             setup(app)?;
             Ok(())
@@ -34,8 +36,11 @@ pub fn run() {
             commands::get_snapshot,
             commands::add_bucket,
             commands::add_tool,
+            commands::update_tool,
             commands::remove_tool,
             commands::update_settings,
+            commands::update_style,
+            commands::run_filled,
             commands::set_anchor,
             commands::set_shell_bounds,
             commands::run_item,

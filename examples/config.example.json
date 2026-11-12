@@ -4,6 +4,13 @@
   "autostart": true,
   "gitBashPath": null,
   "anchor": null,
+  "style": {
+    "snapInset": 16,
+    "gap": 12,
+    "sphereSize": 64,
+    "animationMs": 220,
+    "unfocusedOpacity": 0.38
+  },
   "buckets": [
     {
       "id": "navigation",
@@ -34,6 +41,14 @@
           "shell": "git-bash",
           "cwd": "%USERPROFILE%",
           "command": "git status --short"
+        },
+        {
+          "id": "git-merge",
+          "label": "merge",
+          "type": "command",
+          "shell": "git-bash",
+          "command": "git merge {branch} --verbose",
+          "placeholders": [{ "name": "branch", "kind": "text", "recent": ["main"] }]
         },
         {
           "id": "print-location",

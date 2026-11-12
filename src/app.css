@@ -61,11 +61,11 @@ button {
 }
 
 .orb:not(.main) {
-  animation: sphere-in 220ms var(--ease) backwards;
+  animation: sphere-in var(--motion, 220ms) var(--ease) backwards;
 }
 
 .orb.dim {
-  opacity: 0.38;
+  opacity: var(--dim, 0.38);
 }
 
 .sphere {
@@ -98,12 +98,12 @@ button {
   cursor: grabbing;
 }
 
-.sphere.main svg {
+.sphere svg {
   width: 46%;
   height: 46%;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 1.6;
   stroke-linecap: round;
 }
 
@@ -156,11 +156,15 @@ button {
   text-overflow: ellipsis;
 }
 
+.caption.above {
+  top: auto;
+  bottom: calc(100% + 2px);
+}
+
 .notice {
   position: absolute;
-  z-index: 5;
-  top: 8px;
-  max-width: 180px;
+  z-index: 6;
+  max-width: 420px;
   margin: 0;
   padding: 4px 10px;
   border: 0.5px solid var(--line);
@@ -177,9 +181,55 @@ button {
   animation: fade-in 180ms var(--ease) backwards;
 }
 
-.notice:not(.far) {
-  top: auto;
-  bottom: 8px;
+.inline .text-button {
+  width: auto;
+  flex: none;
+  white-space: nowrap;
+}
+
+.inline {
+  display: flex;
+  gap: 6px;
+}
+
+.inline input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: -2px 0 8px;
+}
+
+.chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 999px;
+  border: 0.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.template {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.danger {
+  width: 100%;
+  margin-top: 8px;
+  color: #ff9f8a;
+}
+
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--blue);
 }
 
 .panel {
@@ -332,12 +382,6 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.settings {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 @keyframes fade-in {

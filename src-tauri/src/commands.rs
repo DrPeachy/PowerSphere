@@ -1,11 +1,12 @@
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::autostart;
-use crate::config::{self, Anchor, AppConfig, NewTool, ToolItem};
+use crate::config::{self, Anchor, AppConfig, NewTool, PlaceholderSpec, StyleSettings, ToolItem};
 use crate::host::TauriHost;
 use crate::paths::detect_git_bash;
 use crate::runner::{RunContext, RunOutput};
 use crate::state::{self, AppState};
+use crate::template::{self, has_placeholders};
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +59,24 @@ pub fn add_tool(
 }
 
 #[tauri::command]
+pub fn update_tool(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    bucket_id: String,
+    item_id: String,
+    tool: NewTool,
+) -> Result<AppSnapshot, String> {
+    ensure_writable(&state)?;
+    let mut item = tool.into_item().map_err(|err| err.to_string())?;
+    item.id = item_id.clone();
+    let mut config = state::lock(&state.config).clone();
+    config
+        .update_item(&bucket_id, &item_id, item)
+        .map_err(|err| err.to_string())?;
+    commit(&app, &state, config)
+}
+
+#[tauri::command]
 pub fn remove_tool(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -88,6 +107,18 @@ pub fn update_settings(
     config.autostart = settings.autostart;
     config.git_bash_path = git_bash_path;
     let _ = state.autostart_item.set_checked(settings.autostart);
+    commit(&app, &state, config)
+}
+
+#[tauri::command]
+pub fn update_style(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    style: StyleSettings,
+) -> Result<AppSnapshot, String> {
+    ensure_writable(&state)?;
+    let mut config = state::lock(&state.config).clone();
+    config.style = style.normalized();
     commit(&app, &state, config)
 }
 
@@ -191,17 +222,120 @@ pub fn run_item(
         let item = find_item(&config, &bucket_id, &item_id)?.clone();
         (item, config.clone())
     };
-    let host = TauriHost { app };
+    if item.kind == "command" {
+        let command = item
+            .params
+            .get("command")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        if has_placeholders(command) {
+            return Err("这个指令含有参数，请填写后再运行".into());
+        }
+    }
+    execute(&app, &state, &config, &item)
+}
+
+#[tauri::command]
+pub fn run_filled(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    bucket_id: String,
+    item_id: String,
+    values: std::collections::HashMap<String, String>,
+) -> Result<RunOutput, String> {
+    ensure_writable(&state)?;
+    let mut config = state::lock(&state.config).clone();
+    let item = find_item(&config, &bucket_id, &item_id)?.clone();
+    if item.kind != "command" {
+        return Err("只有指令需要填写参数".into());
+    }
+    let shell = item
+        .params
+        .get("shell")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    let template = item
+        .params
+        .get("command")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    let mut specs = read_placeholders(&item);
+    let expanded = template::substitute(&template, &values, &specs, &shell)?;
+    for (name, value) in &values {
+        let kind = specs
+            .iter()
+            .find(|spec| spec.name == *name)
+            .map(|spec| spec.kind.clone())
+            .unwrap_or_else(|| "text".into());
+        remember(&mut specs, name, &kind, value);
+    }
+    let mut stored = item.clone();
+    if !specs.is_empty() {
+        stored.params.insert(
+            "placeholders".into(),
+            serde_json::to_value(&specs).map_err(|err| err.to_string())?,
+        );
+    }
+    config
+        .update_item(&bucket_id, &item_id, stored)
+        .map_err(|err| err.to_string())?;
+    config::save(&state.config_path, &config).map_err(|err| err.to_string())?;
+    *state::lock(&state.config) = config.clone();
+    let snapshot = build_snapshot(&state);
+    let _ = app.emit("config-updated", &snapshot);
+
+    let mut runnable = item;
+    runnable
+        .params
+        .insert("command".into(), serde_json::Value::String(expanded));
+    execute(&app, &state, &config, &runnable)
+}
+
+fn execute(
+    app: &AppHandle,
+    state: &AppState,
+    config: &AppConfig,
+    item: &ToolItem,
+) -> Result<RunOutput, String> {
+    let host = TauriHost { app: app.clone() };
     state
         .runners
         .run(
             &RunContext {
-                config: &config,
+                config,
                 host: &host,
             },
-            &item,
+            item,
         )
         .map_err(|err| err.to_string())
+}
+
+fn read_placeholders(item: &ToolItem) -> Vec<PlaceholderSpec> {
+    item.params
+        .get("placeholders")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default()
+}
+
+fn remember(specs: &mut Vec<PlaceholderSpec>, name: &str, kind: &str, value: &str) {
+    let value = value.trim();
+    if value.is_empty() {
+        return;
+    }
+    if let Some(spec) = specs.iter_mut().find(|spec| spec.name == name) {
+        spec.kind = kind.to_string();
+        spec.recent.retain(|existing| existing != value);
+        spec.recent.insert(0, value.to_string());
+        spec.recent.truncate(8);
+        return;
+    }
+    specs.push(PlaceholderSpec {
+        name: name.to_string(),
+        kind: kind.to_string(),
+        recent: vec![value.to_string()],
+    });
 }
 
 pub fn toggle_autostart(app: &AppHandle) -> Result<(), String> {

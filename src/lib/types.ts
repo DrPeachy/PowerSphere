@@ -3,6 +3,20 @@ export interface Anchor {
   y: number;
 }
 
+export interface PlaceholderSpec {
+  name: string;
+  kind: "text" | "file";
+  recent?: string[];
+}
+
+export interface StyleSettings {
+  snapInset: number;
+  gap: number;
+  sphereSize: number;
+  animationMs: number;
+  unfocusedOpacity: number;
+}
+
 export interface ToolItem {
   id: string;
   label: string;
@@ -11,6 +25,8 @@ export interface ToolItem {
   shell?: string;
   cwd?: string;
   command?: string;
+  icon?: string;
+  placeholders?: PlaceholderSpec[];
 }
 
 export interface Bucket {
@@ -24,6 +40,7 @@ export interface AppConfig {
   autostart: boolean;
   gitBashPath?: string | null;
   anchor?: Anchor | null;
+  style?: StyleSettings;
   buckets: Bucket[];
 }
 
@@ -36,13 +53,15 @@ export interface AppSnapshot {
 }
 
 export type NewTool =
-  | { type: "open-path"; label: string; target: string }
+  | { type: "open-path"; label: string; target: string; icon?: string }
   | {
       type: "command";
       label: string;
       shell: string;
       cwd?: string;
       command: string;
+      icon?: string;
+      placeholders?: PlaceholderSpec[];
     };
 
 export interface RunOutput {

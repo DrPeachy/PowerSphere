@@ -19,7 +19,8 @@
     "pnpm": ">=10"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.12.4"
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.7.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

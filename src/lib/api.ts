@@ -1,13 +1,42 @@
-import type { AppConfig, AppSnapshot, NewTool, RunOutput } from "./types";
+import { mergePlaceholders, parseTemplate, substituteCommand } from "./template";
+import type { AppConfig, AppSnapshot, NewTool, PlaceholderSpec, RunOutput, StyleSettings } from "./types";
 
 const FALLBACK: AppConfig = {
   schemaVersion: 1,
   autostart: true,
   gitBashPath: null,
   anchor: null,
+  style: {
+    snapInset: 16,
+    gap: 12,
+    sphereSize: 64,
+    animationMs: 220,
+    unfocusedOpacity: 0.38,
+  },
   buckets: [
     { id: "navigation", name: "导航", items: [] },
-    { id: "command", name: "指令", items: [] },
+    {
+      id: "command",
+      name: "指令",
+      items: [
+        {
+          id: "preview-merge",
+          label: "merge",
+          type: "command",
+          shell: "git-bash",
+          command: "git merge {branch} --verbose",
+          placeholders: [{ name: "branch", kind: "text", recent: ["main"] }],
+        },
+        {
+          id: "preview-apk",
+          label: "安装",
+          type: "command",
+          shell: "cmd",
+          command: "adb install {apk}",
+          placeholders: [{ name: "apk", kind: "file", recent: [] }],
+        },
+      ],
+    },
   ],
 };
 
@@ -57,13 +86,45 @@ export async function addTool(bucketId: string, tool: NewTool): Promise<AppSnaps
       id: `item-preview-${previewSeq++}`,
       label: tool.label,
       type: tool.type,
+      icon: tool.icon,
       ...(tool.type === "open-path"
         ? { target: tool.target }
-        : { shell: tool.shell, cwd: tool.cwd, command: tool.command }),
+        : {
+            shell: tool.shell,
+            cwd: tool.cwd,
+            command: tool.command,
+            placeholders: plainPlaceholders(tool.placeholders),
+          }),
     });
     return previewSnapshot();
   }
   return invoke<AppSnapshot>("add_tool", { bucketId, tool });
+}
+
+export async function updateTool(
+  bucketId: string,
+  itemId: string,
+  tool: NewTool,
+): Promise<AppSnapshot> {
+  if (!inTauri()) {
+    const bucket = preview.buckets.find((entry) => entry.id === bucketId);
+    const item = bucket?.items.find((entry) => entry.id === itemId);
+    if (!bucket || !item) {
+      throw new Error("找不到工具");
+    }
+    Object.assign(item, {
+      label: tool.label,
+      type: tool.type,
+      icon: tool.icon,
+      target: tool.type === "open-path" ? tool.target : undefined,
+      shell: tool.type === "command" ? tool.shell : undefined,
+      cwd: tool.type === "command" ? tool.cwd : undefined,
+      command: tool.type === "command" ? tool.command : undefined,
+      placeholders: tool.type === "command" ? plainPlaceholders(tool.placeholders) : undefined,
+    });
+    return previewSnapshot();
+  }
+  return invoke<AppSnapshot>("update_tool", { bucketId, itemId, tool });
 }
 
 export async function removeTool(bucketId: string, itemId: string): Promise<AppSnapshot> {
@@ -90,6 +151,28 @@ export async function updateSettings(settings: {
   return invoke<AppSnapshot>("update_settings", { settings });
 }
 
+export async function updateStyle(style: StyleSettings): Promise<AppSnapshot> {
+  if (!inTauri()) {
+    preview.style = { ...style };
+    return previewSnapshot();
+  }
+  return invoke<AppSnapshot>("update_style", { style });
+}
+
+export async function pickPath(directory: boolean): Promise<string | null> {
+  if (!inTauri()) {
+    const value = window.prompt(directory ? "文件夹路径" : "文件路径");
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
+  }
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const selected = await open({ directory, multiple: false });
+  if (selected === null) {
+    return null;
+  }
+  return Array.isArray(selected) ? selected[0] : selected;
+}
+
 export async function setShellBounds(bounds: {
   x: number;
   y: number;
@@ -110,11 +193,49 @@ export async function setAnchor(anchor: { x: number; y: number }): Promise<void>
   await invoke("set_anchor", anchor);
 }
 
+export async function runFilled(
+  bucketId: string,
+  itemId: string,
+  values: Record<string, string>,
+): Promise<RunOutput> {
+  if (!inTauri()) {
+    const bucket = preview.buckets.find((entry) => entry.id === bucketId);
+    const item = bucket?.items.find((entry) => entry.id === itemId);
+    if (!item?.command) {
+      throw new Error("找不到指令");
+    }
+    const specs = mergePlaceholders(item.command, item.placeholders);
+    for (const spec of specs) {
+      const value = values[spec.name]?.trim();
+      if (!value) {
+        throw new Error(`请填写 ${spec.name}`);
+      }
+      const recent = [value, ...(spec.recent ?? []).filter((entry) => entry !== value)].slice(0, 8);
+      spec.recent = recent;
+    }
+    item.placeholders = specs;
+    const command = substituteCommand(item.command, values, specs, item.shell ?? "cmd");
+    if (parseTemplate(command).length > 0) {
+      throw new Error("还有未填写的参数");
+    }
+    return { message: `预览：${command}`, pid: null };
+  }
+  return invoke<RunOutput>("run_filled", { bucketId, itemId, values });
+}
+
 export async function runItem(bucketId: string, itemId: string): Promise<RunOutput> {
   if (!inTauri()) {
     return { message: "预览模式不会真正执行", pid: null };
   }
   return invoke<RunOutput>("run_item", { bucketId, itemId });
+}
+
+function plainPlaceholders(specs: PlaceholderSpec[] | undefined): PlaceholderSpec[] | undefined {
+  return specs?.map((spec) => ({
+    name: spec.name,
+    kind: spec.kind,
+    recent: [...(spec.recent ?? [])],
+  }));
 }
 
 function previewSnapshot(): AppSnapshot {
