@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema/powersphere.config.schema.json",
+  "schemaVersion": 1,
+  "autostart": true,
+  "gitBashPath": null,
+  "anchor": null,
+  "buckets": [
+    {
+      "id": "navigation",
+      "name": "导航",
+      "items": [
+        {
+          "id": "open-documents",
+          "label": "文档",
+          "type": "open-path",
+          "target": "%USERPROFILE%\\Documents"
+        },
+        {
+          "id": "open-tauri-docs",
+          "label": "Tauri 文档",
+          "type": "open-path",
+          "target": "https://v2.tauri.app"
+        }
+      ]
+    },
+    {
+      "id": "command",
+      "name": "指令",
+      "items": [
+        {
+          "id": "git-status",
+          "label": "git status",
+          "type": "command",
+          "shell": "git-bash",
+          "cwd": "%USERPROFILE%",
+          "command": "git status --short"
+        },
+        {
+          "id": "print-location",
+          "label": "当前位置",
+          "type": "command",
+          "shell": "powershell",
+          "command": "Write-Output (Get-Location)"
+        }
+      ]
+    }
+  ]
+}

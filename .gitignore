@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+
+# frontend build
+dist/
+build/
+.svelte-kit/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# secrets and local env
+.env
+.env.*
+!.env.example
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor
+.idea/
+*.swp
+
+# vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

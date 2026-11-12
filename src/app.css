@@ -1,0 +1,285 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body.preview {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18), transparent 28%),
+    linear-gradient(160deg, #9aab9d, #6e7f78 55%, #556861);
+  display: grid;
+  place-items: center;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.stage {
+  position: relative;
+  user-select: none;
+}
+
+.sphere {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 220, 180, 0.55);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 236, 214, 0.7), transparent 34%),
+    radial-gradient(circle at 50% 62%, #8a5a38 0%, #3a2618 58%, #160f0b 100%);
+  box-shadow:
+    inset 0 -7px 10px rgba(0, 0, 0, 0.35),
+    0 8px 14px rgba(0, 0, 0, 0.28);
+  color: #fff6ea;
+}
+
+.sphere.main {
+  cursor: grab;
+}
+
+.sphere.bucket {
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 244, 230, 0.55), transparent 36%),
+    radial-gradient(circle at 50% 60%, #6d84a0 0%, #2c3b4d 62%, #141920 100%);
+}
+
+.sphere.action {
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 236, 214, 0.45), transparent 36%),
+    radial-gradient(circle at 50% 60%, #c4844a 0%, #6a3d22 60%, #24150e 100%);
+}
+
+.sphere:focus-visible,
+.plus:focus-visible,
+.panel button:focus-visible,
+.panel input:focus-visible,
+.panel textarea:focus-visible,
+.panel select:focus-visible {
+  outline: 2px solid #ffd7a8;
+  outline-offset: 2px;
+}
+
+.plus {
+  position: absolute;
+  inset: 16%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff4e4;
+}
+
+.plus svg {
+  width: 58%;
+  height: 58%;
+  fill: currentColor;
+}
+
+.mark {
+  font-size: 15px;
+  font-weight: 650;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.caption {
+  position: absolute;
+  width: 88px;
+  transform: translate(-50%, 1px);
+  text-align: center;
+  font-size: 11px;
+  color: #fff8ef;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notice {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(22, 14, 10, 0.88);
+  color: #fff4e4;
+  font-size: 11px;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 12px 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(240, 176, 112, 0.45);
+  background: rgba(28, 21, 16, 0.94);
+  color: #f6efe6;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
+}
+
+.panel h2,
+.panel h3 {
+  margin: 0;
+  font-weight: 650;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.icon-button,
+.text-button,
+.primary {
+  border-radius: 8px;
+  border: 1px solid rgba(240, 176, 112, 0.4);
+  background: #2a1d15;
+  color: #fff4e4;
+}
+
+.icon-button,
+.text-button {
+  padding: 2px 8px;
+}
+
+.primary {
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 10px;
+  background: #8a5430;
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.modes button {
+  border-radius: 999px;
+  border: 1px solid rgba(240, 176, 112, 0.35);
+  background: transparent;
+  padding: 4px 0;
+}
+
+.modes button[aria-pressed="true"] {
+  background: #8a5430;
+  border-color: transparent;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.field span {
+  color: #e7d3bf;
+  font-size: 12px;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid rgba(240, 176, 112, 0.35);
+  background: #120e0b;
+  padding: 6px 8px;
+}
+
+textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check input {
+  width: auto;
+}
+
+.hint,
+.error,
+.path {
+  margin: 4px 0 8px;
+  color: #d9c2ae;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.error {
+  color: #ffb4a2;
+}
+
+.tools {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tool-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(240, 176, 112, 0.2);
+}
