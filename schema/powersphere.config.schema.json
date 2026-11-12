@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DrPeachy/PowerSphere/blob/main/schema/powersphere.config.schema.json",
+  "title": "PowerSphereConfig",
+  "description": "PowerSphere v1 配置。schemaVersion 必须为 1。未知的工具 type 可以保留，供以后的 Runner 使用。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "buckets"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "编辑器提示用，运行时会保留。"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "autostart": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否在登录时启动。默认开启。"
+    },
+    "gitBashPath": {
+      "type": ["string", "null"],
+      "description": "Git Bash 的 bash.exe。null 或省略表示按常见安装位置自动检测。"
+    },
+    "anchor": {
+      "description": "主球体中心的屏幕逻辑坐标。null 表示首次启动时放到工作区右侧。",
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        }
+      ]
+    },
+    "buckets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/bucket" }
+    }
+  },
+  "$defs": {
+    "bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/item" }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["id", "label", "type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1, "description": "Runner 的 type id，例如 open-path 或 command。" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "open-path" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["target"],
+            "properties": {
+              "target": {
+                "type": "string",
+                "minLength": 1,
+                "description": "文件、文件夹、可执行文件或 URL。支持 %ENV% 与 ${ENV}。"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "command" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["shell", "command"],
+            "properties": {
+              "shell": { "enum": ["git-bash", "powershell", "cmd"] },
+              "cwd": {
+                "type": ["string", "null"],
+                "description": "可选工作目录。省略或 null 表示不切换目录。"
+              },
+              "command": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
