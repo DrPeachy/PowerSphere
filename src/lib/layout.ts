@@ -313,7 +313,7 @@ export function computeLayout(
     const labelTop = labelAbove ? cy - size / 2 - metrics.label : cy + size / 2;
     grow(cx - 40, labelTop, cx + 40, labelTop + metrics.label);
   };
-  occupy(0, 0, metrics.main, false);
+  occupy(0, 0, metrics.main + 52, false);
   for (const entry of children) {
     occupy(entry.cx, entry.cy, entry.size, true);
   }
@@ -371,7 +371,7 @@ export function hitRects(layout: Layout, mode: ClusterMode, panelOpen: boolean):
   const rects: HitRect[] = [];
   const main = layout.nodes.find((node) => node.kind === "main");
   if (main) {
-    rects.push(ellipse(main.left, main.top, main.size, pad));
+    rects.push(ellipse(main.left, main.top, main.size, 28));
   }
   if (mode !== "idle") {
     const kids = layout.nodes.filter((node) => node.kind === "bucket" || node.kind === "settings");

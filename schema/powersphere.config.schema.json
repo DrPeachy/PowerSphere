@@ -32,7 +32,16 @@
         "gap": { "type": "number", "minimum": 0, "maximum": 48 },
         "sphereSize": { "type": "number", "minimum": 44, "maximum": 96 },
         "animationMs": { "type": "number", "minimum": 0, "maximum": 600 },
-        "unfocusedOpacity": { "type": "number", "minimum": 0.15, "maximum": 1 }
+        "unfocusedOpacity": { "type": "number", "minimum": 0.15, "maximum": 1 },
+        "sphereStyle": {
+          "enum": ["glass", "pearl", "obsidian"],
+          "description": "主球样式。省略为液态玻璃。"
+        },
+        "centerGlyph": {
+          "type": ["string", "null"],
+          "enum": ["plus", "dots", "petals", "power", "spark", "none", null],
+          "description": "中心符号。null 或省略表示跟随样式默认。"
+        }
       }
     },
     "anchor": {

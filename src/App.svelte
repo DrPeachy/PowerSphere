@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AddPanel from "./lib/AddPanel.svelte";
+  import MainJewel from "./lib/MainJewel.svelte";
   import FillPanel from "./lib/FillPanel.svelte";
   import SettingsPanel from "./lib/SettingsPanel.svelte";
   import {
@@ -26,6 +27,7 @@
     type Placement,
     type WorkArea,
   } from "./lib/layout";
+  import { normalizeStyle, resolveGlyph } from "./lib/jewel";
   import { mergePlaceholders, parseTemplate } from "./lib/template";
   import type { AppSnapshot, Bucket, ToolItem } from "./lib/types";
   import { defaultAnchor, installMoveSaver, readCursor, readWorkArea, setDragLock, syncWindow } from "./lib/window";
@@ -85,7 +87,7 @@
   );
   let panelSize = $derived(
     settingsOpen
-      ? { w: 300, h: 470 }
+      ? { w: 300, h: 560 }
       : fill
         ? { w: 280, h: 320 }
         : editor
@@ -98,6 +100,8 @@
   let origin = $derived(windowOrigin(layout, anchor));
   let editingItem = $derived(findItem(buckets, editor?.bucketId, editor?.itemId));
   let fillItem = $derived(findItem(buckets, fill?.bucketId, fill?.itemId));
+  let sphereLook = $derived(normalizeStyle(snapshot?.config.style?.sphereStyle));
+  let sphereGlyph = $derived(resolveGlyph(sphereLook, snapshot?.config.style?.centerGlyph));
   let noticePos = $derived.by(() => {
     const gap = 8;
     const radius = metrics.main / 2;
@@ -657,7 +661,7 @@
     >
       {#if node.kind === "main"}
         <button
-          class="sphere main"
+          class="sphere main jewel {sphereLook}"
           type="button"
           aria-label="添加工具"
           aria-pressed={editor !== null}
@@ -667,10 +671,7 @@
           onpointerup={onMainPointerUp}
           onclick={onMainClick}
         >
-          <svg class="plus" viewBox="0 0 24 24" aria-hidden="true">
-            <path class="bar v" d="M12 6.5v11" />
-            <path class="bar h" d="M6.5 12h11" />
-          </svg>
+          <MainJewel sphereStyle={sphereLook} glyph={sphereGlyph} />
         </button>
       {:else}
         <button

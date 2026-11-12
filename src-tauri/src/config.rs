@@ -51,6 +51,21 @@ fn default_autostart() -> bool {
     true
 }
 
+fn default_sphere_style() -> String {
+    "glass".into()
+}
+
+fn known_sphere_style(value: &str) -> bool {
+    matches!(value, "glass" | "pearl" | "obsidian")
+}
+
+fn known_glyph(value: &str) -> bool {
+    matches!(
+        value,
+        "plus" | "dots" | "petals" | "power" | "spark" | "none"
+    )
+}
+
 fn default_snap_inset() -> f64 {
     16.0
 }
@@ -115,6 +130,10 @@ pub struct StyleSettings {
     pub animation_ms: f64,
     #[serde(default = "default_unfocused_opacity")]
     pub unfocused_opacity: f64,
+    #[serde(default = "default_sphere_style")]
+    pub sphere_style: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub center_glyph: Option<String>,
 }
 
 impl Default for StyleSettings {
@@ -125,6 +144,8 @@ impl Default for StyleSettings {
             sphere_size: default_sphere_size(),
             animation_ms: default_animation_ms(),
             unfocused_opacity: default_unfocused_opacity(),
+            sphere_style: default_sphere_style(),
+            center_glyph: None,
         }
     }
 }
@@ -137,6 +158,16 @@ impl StyleSettings {
         self.animation_ms = finite(self.animation_ms, default_animation_ms()).clamp(0.0, 600.0);
         self.unfocused_opacity =
             finite(self.unfocused_opacity, default_unfocused_opacity()).clamp(0.15, 1.0);
+        if !known_sphere_style(&self.sphere_style) {
+            self.sphere_style = default_sphere_style();
+        }
+        if self
+            .center_glyph
+            .as_deref()
+            .is_some_and(|glyph| !known_glyph(glyph))
+        {
+            self.center_glyph = None;
+        }
         self
     }
 }
@@ -651,6 +682,22 @@ mod tests {
     fn rejects_a_newer_schema() {
         let error = parse_config(r#"{ "schemaVersion": 99, "buckets": [] }"#).unwrap_err();
         assert!(matches!(error, ConfigError::UnsupportedVersion(99)));
+    }
+
+    #[test]
+    fn style_without_new_fields_still_loads() {
+        let config =
+            parse_config(r#"{ "schemaVersion": 1, "buckets": [], "style": { "gap": 8 } }"#)
+                .unwrap();
+        assert_eq!(config.style.sphere_style, "glass");
+        assert_eq!(config.style.center_glyph, None);
+        assert!((config.style.gap - 8.0).abs() < f64::EPSILON);
+        let weird = parse_config(
+            r#"{ "schemaVersion": 1, "buckets": [], "style": { "sphereStyle": "nope", "centerGlyph": "star" } }"#,
+        )
+        .unwrap();
+        assert_eq!(weird.style.sphere_style, "glass");
+        assert_eq!(weird.style.center_glyph, None);
     }
 
     #[test]

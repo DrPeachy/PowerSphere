@@ -15,6 +15,8 @@ export interface StyleSettings {
   sphereSize: number;
   animationMs: number;
   unfocusedOpacity: number;
+  sphereStyle?: string | null;
+  centerGlyph?: string | null;
 }
 
 export interface ToolItem {
