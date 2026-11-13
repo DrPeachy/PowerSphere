@@ -23,6 +23,27 @@
       "type": ["string", "null"],
       "description": "Git Bash 的 bash.exe。null 或省略表示按常见安装位置自动检测。"
     },
+    "style": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "外观与贴边。省略时使用默认值。",
+      "properties": {
+        "snapInset": { "type": "number", "minimum": 0, "maximum": 80 },
+        "gap": { "type": "number", "minimum": 0, "maximum": 48 },
+        "sphereSize": { "type": "number", "minimum": 44, "maximum": 96 },
+        "animationMs": { "type": "number", "minimum": 0, "maximum": 600 },
+        "unfocusedOpacity": { "type": "number", "minimum": 0.15, "maximum": 1 },
+        "sphereStyle": {
+          "enum": ["glass", "pearl", "obsidian"],
+          "description": "主球样式。省略为液态玻璃。"
+        },
+        "centerGlyph": {
+          "type": ["string", "null"],
+          "enum": ["plus", "dots", "petals", "power", "spark", "none", null],
+          "description": "中心符号。null 或省略表示跟随样式默认。"
+        }
+      }
+    },
     "anchor": {
       "description": "主球体中心的屏幕逻辑坐标。null 表示首次启动时放到工作区右侧。",
       "anyOf": [
@@ -57,13 +78,27 @@
         }
       }
     },
+    "placeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["text", "file"] },
+        "recent": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 8
+        }
+      }
+    },
     "item": {
       "type": "object",
       "required": ["id", "label", "type"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "label": { "type": "string", "minLength": 1 },
-        "type": { "type": "string", "minLength": 1, "description": "Runner 的 type id，例如 open-path 或 command。" }
+        "type": { "type": "string", "minLength": 1, "description": "Runner 的 type id，例如 open-path、command 或 bat。" }
       },
       "allOf": [
         {
@@ -78,7 +113,8 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "文件、文件夹、可执行文件或 URL。支持 %ENV% 与 ${ENV}。"
-              }
+              },
+              "icon": { "type": "string" }
             }
           }
         },
@@ -95,7 +131,41 @@
                 "type": ["string", "null"],
                 "description": "可选工作目录。省略或 null 表示不切换目录。"
               },
-              "command": { "type": "string", "minLength": 1 }
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "命令模板。用 {branch} 或 {apk:file} 标记每次运行要填写的参数。"
+              },
+              "icon": { "type": "string" },
+              "placeholders": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/placeholder" }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "bat" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["target"],
+            "properties": {
+              "target": {
+                "type": "string",
+                "minLength": 1,
+                "description": "要执行的 .bat 或 .cmd。支持 %ENV%。"
+              },
+              "cwd": {
+                "type": ["string", "null"],
+                "description": "可选工作目录。省略则使用脚本所在文件夹。"
+              },
+              "args": {
+                "type": "string",
+                "description": "可选参数，原样接在脚本路径后面。"
+              },
+              "icon": { "type": "string" }
             }
           }
         }

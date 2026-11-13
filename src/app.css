@@ -1,8 +1,15 @@
 :root {
   color-scheme: dark;
-  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 13px;
-  line-height: 1.4;
+  font-weight: 450;
+  line-height: 1.35;
+  --glass: rgba(44, 44, 46, 0.62);
+  --glass-strong: rgba(36, 36, 38, 0.78);
+  --line: rgba(255, 255, 255, 0.22);
+  --ink: #f5f5f7;
+  --blue: #0a84ff;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html,
@@ -17,10 +24,8 @@ body,
 
 body.preview {
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18), transparent 28%),
-    linear-gradient(160deg, #9aab9d, #6e7f78 55%, #556861);
-  display: grid;
-  place-items: center;
+    linear-gradient(165deg, #d5d8df 0%, #b7c0c8 42%, #9aa6b2 100%);
+  min-height: 100vh;
 }
 
 button,
@@ -38,114 +43,233 @@ button {
 .stage {
   position: relative;
   user-select: none;
+  touch-action: none;
+}
+
+.stage.preview {
+  position: fixed;
+}
+
+.orb {
+  position: absolute;
+  z-index: 2;
+  overflow: visible;
+}
+
+.orb.main {
+  z-index: 4;
+}
+
+.orb:not(.main) {
+  opacity: 0;
+  transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.94);
+  pointer-events: none;
+  transition:
+    transform var(--motion, 220ms) var(--ease),
+    opacity var(--motion, 220ms) var(--ease);
+}
+
+.orb:not(.main).open {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  pointer-events: auto;
+}
+
+@starting-style {
+  .orb:not(.main).open {
+    opacity: 0;
+    transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.94);
+  }
+}
+
+.orb:not(.main).open.dim {
+  opacity: var(--dim, 0.38);
 }
 
 .sphere {
   position: absolute;
-  box-sizing: border-box;
+  inset: 0;
+  display: grid;
+  place-items: center;
   padding: 0;
+  border: 0.5px solid var(--line);
   border-radius: 50%;
-  border: 1px solid rgba(255, 220, 180, 0.55);
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 236, 214, 0.7), transparent 34%),
-    radial-gradient(circle at 50% 62%, #8a5a38 0%, #3a2618 58%, #160f0b 100%);
+  background: var(--glass);
   box-shadow:
-    inset 0 -7px 10px rgba(0, 0, 0, 0.35),
-    0 8px 14px rgba(0, 0, 0, 0.28);
-  color: #fff6ea;
+    0 10px 24px rgba(0, 0, 0, 0.18),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  color: var(--ink);
+  transition:
+    transform 180ms var(--ease),
+    opacity 160ms ease,
+    background 160ms ease;
 }
 
 .sphere.main {
   cursor: grab;
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 
-.sphere.bucket {
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 244, 230, 0.55), transparent 36%),
-    radial-gradient(circle at 50% 60%, #6d84a0 0%, #2c3b4d 62%, #141920 100%);
+.stage.dragging .sphere.main {
+  cursor: grabbing;
+  border-color: transparent;
+  box-shadow: none;
 }
 
-.sphere.action {
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 236, 214, 0.45), transparent 36%),
-    radial-gradient(circle at 50% 60%, #c4844a 0%, #6a3d22 60%, #24150e 100%);
+.sphere:not(.main) svg {
+  width: 46%;
+  height: 46%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.glyph {
+  font-size: 15px;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+}
+
+.sphere:not(.main):hover {
+  transform: scale(1.06);
+}
+
+.orb.focused .sphere {
+  transform: scale(1.05);
+  background: rgba(72, 72, 74, 0.82);
+}
+
+.orb.focused .sphere:hover {
+  transform: scale(1.08);
+}
+
+.sphere:not(.main):active {
+  transform: scale(0.94);
 }
 
 .sphere:focus-visible,
-.plus:focus-visible,
 .panel button:focus-visible,
 .panel input:focus-visible,
 .panel textarea:focus-visible,
 .panel select:focus-visible {
-  outline: 2px solid #ffd7a8;
+  outline: 2px solid var(--blue);
   outline-offset: 2px;
-}
-
-.plus {
-  position: absolute;
-  inset: 16%;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: #fff4e4;
-}
-
-.plus svg {
-  width: 58%;
-  height: 58%;
-  fill: currentColor;
-}
-
-.mark {
-  font-size: 15px;
-  font-weight: 650;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 .caption {
   position: absolute;
-  width: 88px;
-  transform: translate(-50%, 1px);
+  top: calc(100% + 2px);
+  left: 50%;
+  width: 76px;
+  transform: translateX(-50%);
   text-align: center;
   font-size: 11px;
-  color: #fff8ef;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  font-weight: 500;
+  color: #f5f5f7;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   pointer-events: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.caption.above {
+  top: auto;
+  bottom: calc(100% + 2px);
 }
 
 .notice {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  z-index: 6;
+  max-width: 420px;
   margin: 0;
-  padding: 3px 8px;
+  padding: 4px 10px;
+  border: 0.5px solid var(--line);
   border-radius: 999px;
-  background: rgba(22, 14, 10, 0.88);
-  color: #fff4e4;
+  background: var(--glass-strong);
+  backdrop-filter: blur(16px);
+  color: var(--ink);
   font-size: 11px;
   text-align: center;
   pointer-events: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  animation: fade-in 180ms var(--ease) backwards;
+}
+
+.inline .text-button {
+  width: auto;
+  flex: none;
+  white-space: nowrap;
+}
+
+.inline {
+  display: flex;
+  gap: 6px;
+}
+
+.inline input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: -2px 0 8px;
+}
+
+.chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 999px;
+  border: 0.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.template {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.danger {
+  width: 100%;
+  margin-top: 8px;
+  color: #ff9f8a;
+}
+
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--blue);
 }
 
 .panel {
   position: absolute;
+  z-index: 5;
   box-sizing: border-box;
   overflow: auto;
-  padding: 12px 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(240, 176, 112, 0.45);
-  background: rgba(28, 21, 16, 0.94);
-  color: #f6efe6;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
+  padding: 14px 14px 16px;
+  border-radius: 20px;
+  border: 0.5px solid var(--line);
+  background: rgba(28, 28, 30, 0.78);
+  color: var(--ink);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  animation: sphere-in 200ms var(--ease) backwards;
 }
 
 .panel h2,
@@ -165,10 +289,10 @@ button {
 .icon-button,
 .text-button,
 .primary {
-  border-radius: 8px;
-  border: 1px solid rgba(240, 176, 112, 0.4);
-  background: #2a1d15;
-  color: #fff4e4;
+  border-radius: 10px;
+  border: 0.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
 }
 
 .icon-button,
@@ -179,8 +303,11 @@ button {
 .primary {
   width: 100%;
   margin-top: 8px;
-  padding: 7px 10px;
-  background: #8a5430;
+  padding: 8px 10px;
+  border: none;
+  background: var(--blue);
+  color: white;
+  font-weight: 560;
 }
 
 .primary:disabled {
@@ -190,21 +317,20 @@ button {
 
 .modes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin-bottom: 10px;
 }
 
 .modes button {
   border-radius: 999px;
-  border: 1px solid rgba(240, 176, 112, 0.35);
-  background: transparent;
-  padding: 4px 0;
+  border: 0.5px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 5px 0;
 }
 
 .modes button[aria-pressed="true"] {
-  background: #8a5430;
-  border-color: transparent;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .field {
@@ -214,7 +340,7 @@ button {
 }
 
 .field span {
-  color: #e7d3bf;
+  color: rgba(235, 235, 245, 0.7);
   font-size: 12px;
 }
 
@@ -223,10 +349,14 @@ textarea,
 select {
   width: 100%;
   box-sizing: border-box;
-  border-radius: 8px;
-  border: 1px solid rgba(240, 176, 112, 0.35);
-  background: #120e0b;
-  padding: 6px 8px;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  padding: 7px 8px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--blue);
 }
 
 textarea {
@@ -249,13 +379,13 @@ textarea {
 .error,
 .path {
   margin: 4px 0 8px;
-  color: #d9c2ae;
+  color: rgba(235, 235, 245, 0.62);
   font-size: 11px;
   word-break: break-all;
 }
 
 .error {
-  color: #ffb4a2;
+  color: #ff9f8a;
 }
 
 .tools {
@@ -278,8 +408,657 @@ textarea {
   white-space: nowrap;
 }
 
-.settings {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(240, 176, 112, 0.2);
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sphere-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.94);
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.jewel {
+  --jewel-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --jewel-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --glyph: #fff;
+  --glyph-glow: drop-shadow(0 1px 1px rgba(16, 28, 64, 0.85));
+  color: var(--glyph);
+  overflow: visible;
+  transition:
+    transform 0.42s var(--jewel-ease),
+    box-shadow 0.42s var(--jewel-ease);
+}
+
+.jewel.glass {
+  --glyph: #fff;
+  --glyph-glow: drop-shadow(0 1px 1px rgba(16, 28, 64, 0.85));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+    inset 0 0 0 2px rgba(8, 12, 22, 0.28),
+    0 8px 18px rgba(20, 30, 60, 0.2),
+    0 1px 3px rgba(20, 30, 60, 0.16);
+}
+
+.jewel.pearl {
+  --glyph: rgba(110, 82, 132, 0.92);
+  --glyph-glow: drop-shadow(0 0.75px 0 rgba(255, 255, 255, 0.65));
+  box-shadow:
+    0 8px 18px rgba(60, 40, 80, 0.22),
+    0 2px 4px rgba(60, 40, 80, 0.12),
+    inset 0 -2px 6px rgba(120, 90, 140, 0.18);
+}
+
+.jewel.obsidian {
+  --glyph: #ffb547;
+  --glyph-glow: drop-shadow(0 0 6px rgba(255, 160, 50, 0.8));
+  box-shadow:
+    inset 0 0 0 0.75px rgba(255, 255, 255, 0.1),
+    inset 0 -2px 3px rgba(255, 255, 255, 0.08),
+    0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.body,
+.layer,
+.sigil,
+.sigil * {
+  pointer-events: none;
+}
+
+.body {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.36s var(--jewel-ease);
+}
+
+.body.on {
+  opacity: 1;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transition:
+    transform 0.42s var(--jewel-ease),
+    opacity 0.42s var(--jewel-ease),
+    filter 0.42s var(--jewel-ease);
+}
+
+.body.glass {
+  background: transparent;
+}
+
+.glass .rim {
+  background: conic-gradient(
+    from 210deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(150, 200, 255, 0.55),
+    rgba(255, 255, 255, 0.15) 30%,
+    rgba(255, 170, 220, 0.5) 48%,
+    rgba(255, 255, 255, 0.9) 58%,
+    rgba(170, 255, 230, 0.45) 75%,
+    rgba(255, 255, 255, 0.95)
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent 86%, #000 97%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 86%, #000 97%, transparent 100%);
+  opacity: 0.75;
+}
+
+.glass .spec {
+  inset: 16% auto auto 18%;
+  width: 28%;
+  height: 20%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 72%);
+}
+
+.glass .spec-soft {
+  inset: 18% auto auto 16%;
+  width: 36%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 70%);
+  opacity: 0;
+}
+
+.glass .caustic {
+  background: radial-gradient(
+    85% 62% at 94% 98%,
+    rgba(255, 255, 255, 0.7),
+    rgba(214, 236, 255, 0.28) 32%,
+    transparent 60%
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent 80%, #000 90%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 80%, #000 90%, transparent 100%);
+  opacity: 0;
+}
+
+.glass .lip-shadow {
+  background: radial-gradient(70% 60% at 0% 0%, rgba(0, 0, 0, 0.18), transparent 58%);
+  -webkit-mask: radial-gradient(closest-side, transparent 90%, #000 96%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 90%, #000 96%, transparent 100%);
+  opacity: 0;
+}
+
+.glass .caus {
+  background: radial-gradient(46% 28% at 78% 84%, rgba(230, 244, 255, 0.9), transparent 68%);
+  -webkit-mask: radial-gradient(closest-side, transparent 68%, #000 86%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 68%, #000 86%, transparent 100%);
+  opacity: 0.85;
+}
+
+.glass-gl {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.body.glass.webgl {
+  background: none;
+}
+
+.body.glass.webgl .glass-gl {
+  opacity: 1;
+}
+
+.body.glass.webgl .layer,
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .body.glass.webgl .layer {
+  opacity: 0;
+}
+
+.jewel.glass:has(.body.glass.webgl) {
+  box-shadow:
+    0 8px 18px rgba(20, 30, 60, 0.2),
+    0 1px 3px rgba(20, 30, 60, 0.16);
+}
+
+.jewel.glass:has(.body.glass.webgl):is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    0 4px 10px rgba(20, 30, 60, 0.14),
+    0 1px 2px rgba(20, 30, 60, 0.12);
+}
+
+.stage.dragging .jewel.glass:has(.body.glass.webgl),
+.stage.dragging .jewel.glass:has(.body.glass.webgl):is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow: none;
+}
+
+.stage:not(.dragging) .jewel.glass.drop-hot {
+  transform: scale(1.03);
+  box-shadow:
+    0 0 18px rgba(186, 220, 255, 0.55),
+    0 6px 14px rgba(20, 30, 60, 0.16);
+}
+
+.body.pearl {
+  overflow: hidden;
+  background: radial-gradient(circle at 38% 30%, #fff 0, #f8f3f5 22%, #e9e1ea 52%, #d2c8d9 82%, #bdb3c6 100%);
+}
+
+.pearl .iri {
+  inset: -10%;
+  border-radius: 0;
+  background: conic-gradient(from 0deg, #ffc2e2, #cbbcff, #a9e2ff, #b9ffe0, #fff0b3, #ffc2e2);
+  mix-blend-mode: multiply;
+  opacity: 0.35;
+  -webkit-mask: radial-gradient(circle at 42% 36%, transparent 18%, #000 72%);
+  mask: radial-gradient(circle at 42% 36%, transparent 18%, #000 72%);
+  transition:
+    transform 1s var(--jewel-ease),
+    opacity 0.6s;
+}
+
+.pearl .spec {
+  inset: 12.5% auto auto 21%;
+  width: 32%;
+  height: 23%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #fff, rgba(255, 255, 255, 0));
+  opacity: 0.95;
+}
+
+.body.obsidian {
+  background: radial-gradient(circle at 50% 125%, #30343f, #0c0e13 62%, #07080b);
+}
+
+.obsidian .gloss {
+  inset: 5% 18% auto;
+  height: 39%;
+  border-radius: 50%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0));
+}
+
+.obsidian .halo {
+  background: radial-gradient(circle, rgba(255, 170, 60, 0.45), rgba(255, 140, 40, 0) 60%);
+  opacity: 0.5;
+  transform: scale(0.5);
+}
+
+.obsidian .core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14%;
+  height: 14%;
+  margin: -7%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6e0, #ffb547 55%, #ff8a1f);
+  box-shadow: 0 0 8px 2px rgba(255, 160, 50, 0.75);
+  animation: core-breath 3s ease-in-out infinite;
+}
+
+.sigil {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  color: var(--glyph);
+  filter: var(--glyph-glow);
+  transition: opacity 0.32s var(--jewel-ease);
+}
+
+.sigil.on {
+  opacity: 1;
+}
+
+.sigil svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  height: 34%;
+  transform: translate(-50%, -50%);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+}
+
+.sigil.plus svg {
+  opacity: 0;
+  transition: opacity 0.28s var(--jewel-ease);
+}
+
+.sigil.plus .arm,
+.sigil.power .arc,
+.sigil.power .stem {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.42s var(--jewel-ease);
+}
+
+.dots i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 11%;
+  height: 11%;
+  border-radius: 50%;
+  background: var(--glyph);
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.35);
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  transition: transform 0.5s var(--jewel-spring);
+}
+
+.petals {
+  position: absolute;
+  inset: 0;
+}
+
+.petal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9%;
+  height: 20%;
+  margin-left: -4.5%;
+  margin-top: -20%;
+  border-radius: 50% 50% 45% 45%;
+  background: linear-gradient(to top, var(--glyph), color-mix(in srgb, white 62%, var(--glyph)));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--glyph) 75%, transparent);
+  transform-origin: 50% 100%;
+  opacity: 0;
+  transition:
+    transform 0.5s var(--jewel-spring),
+    opacity 0.3s var(--jewel-ease);
+}
+
+.petal.p1 { transform: rotate(-45deg) scale(0.2); }
+.petal.p2 { transform: rotate(45deg) scale(0.2); }
+.petal.p3 { transform: rotate(135deg) scale(0.2); }
+.petal.p4 { transform: rotate(225deg) scale(0.2); }
+
+.sigil.power .arc,
+.sigil.power .stem {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.sigil.spark i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16%;
+  height: 16%;
+  margin: -8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff, var(--glyph) 58%, transparent 72%);
+  box-shadow: 0 0 10px var(--glyph);
+  animation: core-breath 3.2s ease-in-out infinite;
+}
+
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  transform: scale(0.97);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+    inset 0 0 0 2px rgba(8, 12, 22, 0.22),
+    0 4px 10px rgba(20, 30, 60, 0.14),
+    0 1px 2px rgba(20, 30, 60, 0.12);
+}
+
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec {
+  opacity: 0.32;
+}
+
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec-soft,
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .caustic,
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .lip-shadow {
+  opacity: 1;
+}
+
+.jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  transform: scale(1.05);
+  box-shadow:
+    0 12px 24px rgba(60, 40, 80, 0.26),
+    0 0 18px rgba(220, 180, 255, 0.45),
+    inset 0 -2px 6px rgba(120, 90, 140, 0.18);
+}
+
+.jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) .iri {
+  transform: rotate(200deg);
+  opacity: 0.75;
+}
+
+.jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) .spec {
+  transform: translate(12%, 8%) scale(1.15);
+}
+
+.jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  transform: scale(1.05);
+  box-shadow:
+    inset 0 0 0 0.75px rgba(255, 200, 140, 0.25),
+    inset 0 -2px 3px rgba(255, 255, 255, 0.08),
+    0 8px 20px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(255, 150, 50, 0.25);
+}
+
+.jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) .halo {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) .core {
+  animation: none;
+  opacity: 1;
+  transform: scale(0.45);
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.plus svg {
+  opacity: 1;
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.plus .arm,
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.power .arc,
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.power .stem {
+  stroke-dashoffset: 0;
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .dots i:nth-child(1) {
+  transform: translate(calc(-50% - 90%), calc(-50% - 90%));
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .dots i:nth-child(2) {
+  transform: translate(calc(-50% + 90%), calc(-50% - 90%));
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .dots i:nth-child(3) {
+  transform: translate(calc(-50% - 90%), calc(-50% + 90%));
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .dots i:nth-child(4) {
+  transform: translate(calc(-50% + 90%), calc(-50% + 90%));
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal {
+  opacity: 1;
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p1 {
+  transform: rotate(0deg) translateY(-14%);
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p2 {
+  transform: rotate(90deg) translateY(-14%);
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p3 {
+  transform: rotate(180deg) translateY(-14%);
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p4 {
+  transform: rotate(270deg) translateY(-14%);
+}
+
+.jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.spark i {
+  animation: none;
+  opacity: 1;
+  transform: scale(1.85);
+  box-shadow: 0 0 16px 4px var(--glyph);
+}
+
+.stage.pointer-out:not(.dragging) .sphere:not(.main):hover {
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .orb.focused .sphere:hover {
+  transform: scale(1.05);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+    inset 0 0 0 2px rgba(8, 12, 22, 0.28),
+    0 8px 18px rgba(20, 30, 60, 0.2),
+    0 1px 3px rgba(20, 30, 60, 0.16);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:has(.body.glass.webgl):is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    0 8px 18px rgba(20, 30, 60, 0.2),
+    0 1px 3px rgba(20, 30, 60, 0.16);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec {
+  opacity: 1;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec-soft,
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .lip-shadow {
+  opacity: 0;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .caustic {
+  opacity: 0.85;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    0 8px 18px rgba(60, 40, 80, 0.22),
+    0 2px 4px rgba(60, 40, 80, 0.12),
+    inset 0 -2px 6px rgba(120, 90, 140, 0.18);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) .iri {
+  transform: none;
+  opacity: 0.35;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) .spec {
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    inset 0 0 0 0.75px rgba(255, 255, 255, 0.1),
+    inset 0 -2px 3px rgba(255, 255, 255, 0.08),
+    0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) .halo {
+  opacity: 0.5;
+  transform: scale(0.5);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) .core {
+  animation: core-breath 3s ease-in-out infinite;
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.plus svg {
+  opacity: 0;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.plus .arm,
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.power .arc,
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.power .stem {
+  stroke-dashoffset: 1;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .dots i {
+  transform: translate(-50%, -50%);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal {
+  opacity: 0;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p1 {
+  transform: rotate(-45deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p2 {
+  transform: rotate(45deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p3 {
+  transform: rotate(135deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p4 {
+  transform: rotate(225deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.spark i {
+  animation: core-breath 3.2s ease-in-out infinite;
+  transform: none;
+  box-shadow: 0 0 10px var(--glyph);
+}
+
+.stage.dragging .jewel,
+.stage.dragging .jewel .layer,
+.stage.dragging .jewel .sigil,
+.stage.dragging .jewel .sigil *,
+.stage.dragging .jewel .core,
+.stage.dragging .jewel .spark,
+.stage.holding .jewel,
+.stage.holding .jewel .layer,
+.stage.holding .jewel .sigil,
+.stage.holding .jewel .sigil * {
+  transition: none;
+  animation: none;
+}
+
+.stage.dragging .jewel.glass,
+.stage.dragging .jewel.pearl,
+.stage.dragging .jewel.obsidian {
+  transform: none;
+}
+
+.preview-stage {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  margin: 2px auto 12px;
+}
+
+.preview-stage .sphere.main {
+  inset: 20px;
+}
+
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.choice-row button {
+  border-radius: 999px;
+  border: 0.5px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.choice-row button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@keyframes core-breath {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .sphere,
+  .panel,
+  .notice,
+  .jewel,
+  .jewel .layer,
+  .jewel .body,
+  .jewel .sigil,
+  .jewel .sigil *,
+  .jewel .core,
+  .jewel .spark {
+    animation: none;
+    transition: none;
+  }
 }

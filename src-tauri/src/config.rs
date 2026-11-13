@@ -51,6 +51,49 @@ fn default_autostart() -> bool {
     true
 }
 
+fn default_sphere_style() -> String {
+    "glass".into()
+}
+
+fn known_sphere_style(value: &str) -> bool {
+    matches!(value, "glass" | "pearl" | "obsidian")
+}
+
+fn known_glyph(value: &str) -> bool {
+    matches!(
+        value,
+        "plus" | "dots" | "petals" | "power" | "spark" | "none"
+    )
+}
+
+fn default_snap_inset() -> f64 {
+    16.0
+}
+
+fn default_gap() -> f64 {
+    12.0
+}
+
+fn default_sphere_size() -> f64 {
+    64.0
+}
+
+fn default_animation_ms() -> f64 {
+    220.0
+}
+
+fn default_unfocused_opacity() -> f64 {
+    0.38
+}
+
+fn default_text_kind() -> String {
+    "text".into()
+}
+
+fn finite(value: f64, fallback: f64) -> f64 {
+    if value.is_finite() { value } else { fallback }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AppConfig {
@@ -61,6 +104,8 @@ pub struct AppConfig {
     pub git_bash_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<Anchor>,
+    #[serde(default)]
+    pub style: StyleSettings,
     pub buckets: Vec<Bucket>,
     #[serde(default, rename = "$schema", skip_serializing_if = "Option::is_none")]
     pub schema_doc: Option<String>,
@@ -70,6 +115,71 @@ pub struct AppConfig {
 pub struct Anchor {
     pub x: f64,
     pub y: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StyleSettings {
+    #[serde(default = "default_snap_inset")]
+    pub snap_inset: f64,
+    #[serde(default = "default_gap")]
+    pub gap: f64,
+    #[serde(default = "default_sphere_size")]
+    pub sphere_size: f64,
+    #[serde(default = "default_animation_ms")]
+    pub animation_ms: f64,
+    #[serde(default = "default_unfocused_opacity")]
+    pub unfocused_opacity: f64,
+    #[serde(default = "default_sphere_style")]
+    pub sphere_style: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub center_glyph: Option<String>,
+}
+
+impl Default for StyleSettings {
+    fn default() -> Self {
+        Self {
+            snap_inset: default_snap_inset(),
+            gap: default_gap(),
+            sphere_size: default_sphere_size(),
+            animation_ms: default_animation_ms(),
+            unfocused_opacity: default_unfocused_opacity(),
+            sphere_style: default_sphere_style(),
+            center_glyph: None,
+        }
+    }
+}
+
+impl StyleSettings {
+    pub fn normalized(mut self) -> Self {
+        self.snap_inset = finite(self.snap_inset, default_snap_inset()).clamp(0.0, 80.0);
+        self.gap = finite(self.gap, default_gap()).clamp(0.0, 48.0);
+        self.sphere_size = finite(self.sphere_size, default_sphere_size()).clamp(44.0, 96.0);
+        self.animation_ms = finite(self.animation_ms, default_animation_ms()).clamp(0.0, 600.0);
+        self.unfocused_opacity =
+            finite(self.unfocused_opacity, default_unfocused_opacity()).clamp(0.15, 1.0);
+        if !known_sphere_style(&self.sphere_style) {
+            self.sphere_style = default_sphere_style();
+        }
+        if self
+            .center_glyph
+            .as_deref()
+            .is_some_and(|glyph| !known_glyph(glyph))
+        {
+            self.center_glyph = None;
+        }
+        self
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaceholderSpec {
+    pub name: String,
+    #[serde(default = "default_text_kind")]
+    pub kind: String,
+    #[serde(default)]
+    pub recent: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -97,7 +207,12 @@ pub struct ToolItem {
 #[serde(tag = "type")]
 pub enum NewTool {
     #[serde(rename = "open-path")]
-    OpenPath { label: String, target: String },
+    OpenPath {
+        label: String,
+        target: String,
+        #[serde(default)]
+        icon: Option<String>,
+    },
     #[serde(rename = "command")]
     Command {
         label: String,
@@ -105,6 +220,21 @@ pub enum NewTool {
         #[serde(default)]
         cwd: Option<String>,
         command: String,
+        #[serde(default)]
+        icon: Option<String>,
+        #[serde(default)]
+        placeholders: Vec<PlaceholderSpec>,
+    },
+    #[serde(rename = "bat")]
+    Bat {
+        label: String,
+        target: String,
+        #[serde(default)]
+        cwd: Option<String>,
+        #[serde(default)]
+        args: Option<String>,
+        #[serde(default)]
+        icon: Option<String>,
     },
 }
 
@@ -115,6 +245,7 @@ impl AppConfig {
             autostart: true,
             git_bash_path: None,
             anchor: None,
+            style: StyleSettings::default(),
             buckets: default_buckets(),
             schema_doc: None,
         }
@@ -156,6 +287,28 @@ impl AppConfig {
         Ok(())
     }
 
+    pub fn update_item(
+        &mut self,
+        bucket_id: &str,
+        item_id: &str,
+        mut item: ToolItem,
+    ) -> Result<(), ConfigError> {
+        item.id = item_id.to_string();
+        validate_item(&item)?;
+        let bucket = self
+            .buckets
+            .iter_mut()
+            .find(|bucket| bucket.id == bucket_id)
+            .ok_or_else(|| ConfigError::Invalid(format!("找不到分组：{bucket_id}")))?;
+        let slot = bucket
+            .items
+            .iter_mut()
+            .find(|existing| existing.id == item_id)
+            .ok_or_else(|| ConfigError::Invalid(format!("找不到工具：{item_id}")))?;
+        *slot = item;
+        Ok(())
+    }
+
     pub fn remove_item(&mut self, bucket_id: &str, item_id: &str) -> Result<(), ConfigError> {
         let bucket = self
             .buckets
@@ -174,7 +327,9 @@ impl AppConfig {
 impl NewTool {
     pub fn into_item(self) -> Result<ToolItem, ConfigError> {
         let label = match &self {
-            Self::OpenPath { label, .. } | Self::Command { label, .. } => label.trim().to_string(),
+            Self::OpenPath { label, .. }
+            | Self::Command { label, .. }
+            | Self::Bat { label, .. } => label.trim().to_string(),
         };
         if label.is_empty() {
             return Err(ConfigError::Invalid("名称不能为空".into()));
@@ -183,19 +338,22 @@ impl NewTool {
             return Err(ConfigError::Invalid("名称过长".into()));
         }
         let (kind, params) = match self {
-            Self::OpenPath { target, .. } => {
+            Self::OpenPath { target, icon, .. } => {
                 let target = target.trim().to_string();
                 if target.is_empty() {
                     return Err(ConfigError::Invalid("路径或网址不能为空".into()));
                 }
                 let mut params = Map::new();
                 params.insert("target".into(), Value::String(target));
+                insert_icon(&mut params, icon)?;
                 ("open-path", params)
             }
             Self::Command {
                 shell,
                 cwd,
                 command,
+                icon,
+                placeholders,
                 ..
             } => {
                 let mut params = Map::new();
@@ -207,7 +365,37 @@ impl NewTool {
                 {
                     params.insert("cwd".into(), Value::String(cwd));
                 }
+                insert_icon(&mut params, icon)?;
+                insert_placeholders(&mut params, placeholders)?;
                 ("command", params)
+            }
+            Self::Bat {
+                target,
+                cwd,
+                args,
+                icon,
+                ..
+            } => {
+                let target = target.trim().to_string();
+                if !is_batch_path(&target) {
+                    return Err(ConfigError::Invalid("请选择 .bat 或 .cmd 文件".into()));
+                }
+                let mut params = Map::new();
+                params.insert("target".into(), Value::String(target));
+                if let Some(cwd) = cwd
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                {
+                    params.insert("cwd".into(), Value::String(cwd));
+                }
+                if let Some(args) = args
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                {
+                    params.insert("args".into(), Value::String(args));
+                }
+                insert_icon(&mut params, icon)?;
+                ("bat", params)
             }
         };
         let item = ToolItem {
@@ -244,7 +432,8 @@ pub fn parse_config(text: &str) -> Result<AppConfig, ConfigError> {
     if version < u64::from(SCHEMA_VERSION) {
         value = migrate(value, version)?;
     }
-    let config: AppConfig = serde_json::from_value(value)?;
+    let mut config: AppConfig = serde_json::from_value(value)?;
+    config.style = config.style.normalized();
     validate_config(&config)?;
     Ok(config)
 }
@@ -358,8 +547,79 @@ fn validate_item(item: &ToolItem) -> Result<(), ConfigError> {
                 )));
             }
         }
+        "bat" => {
+            let target = param_str(item, "target").unwrap_or("");
+            if !is_batch_path(target) {
+                return Err(ConfigError::Invalid(format!(
+                    "bat 需要 .bat 或 .cmd 路径：{}",
+                    item.id
+                )));
+            }
+        }
         _ => {}
     }
+    Ok(())
+}
+
+fn is_batch_path(path: &str) -> bool {
+    let lower = path.trim().to_ascii_lowercase();
+    lower.ends_with(".bat") || lower.ends_with(".cmd")
+}
+
+fn insert_icon(params: &mut Map<String, Value>, icon: Option<String>) -> Result<(), ConfigError> {
+    let Some(icon) = icon
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(());
+    };
+    if icon.chars().count() > 4 {
+        return Err(ConfigError::Invalid("图标最多 4 个字符".into()));
+    }
+    params.insert("icon".into(), Value::String(icon));
+    Ok(())
+}
+
+fn insert_placeholders(
+    params: &mut Map<String, Value>,
+    placeholders: Vec<PlaceholderSpec>,
+) -> Result<(), ConfigError> {
+    if placeholders.is_empty() {
+        return Ok(());
+    }
+    let mut clean = Vec::new();
+    for spec in placeholders {
+        let name = spec.name.trim().to_string();
+        if name.is_empty() {
+            return Err(ConfigError::Invalid("占位符名称不能为空".into()));
+        }
+        if spec.kind != "text" && spec.kind != "file" {
+            return Err(ConfigError::Invalid(format!(
+                "占位符类型无效：{}",
+                spec.kind
+            )));
+        }
+        let mut recent = Vec::new();
+        for value in spec.recent {
+            let value = value.trim().to_string();
+            if value.is_empty() || recent.iter().any(|existing| existing == &value) {
+                continue;
+            }
+            recent.push(value);
+            if recent.len() == 8 {
+                break;
+            }
+        }
+        clean.push(PlaceholderSpec {
+            name,
+            kind: spec.kind,
+            recent,
+        });
+    }
+    params.insert(
+        "placeholders".into(),
+        serde_json::to_value(clean).map_err(ConfigError::from)?,
+    );
     Ok(())
 }
 
@@ -425,6 +685,22 @@ mod tests {
     }
 
     #[test]
+    fn style_without_new_fields_still_loads() {
+        let config =
+            parse_config(r#"{ "schemaVersion": 1, "buckets": [], "style": { "gap": 8 } }"#)
+                .unwrap();
+        assert_eq!(config.style.sphere_style, "glass");
+        assert_eq!(config.style.center_glyph, None);
+        assert!((config.style.gap - 8.0).abs() < f64::EPSILON);
+        let weird = parse_config(
+            r#"{ "schemaVersion": 1, "buckets": [], "style": { "sphereStyle": "nope", "centerGlyph": "star" } }"#,
+        )
+        .unwrap();
+        assert_eq!(weird.style.sphere_style, "glass");
+        assert_eq!(weird.style.center_glyph, None);
+    }
+
+    #[test]
     fn example_file_parses() {
         let raw = include_str!("../../examples/config.example.json");
         let config = parse_config(raw).unwrap();
@@ -456,6 +732,7 @@ mod tests {
                 NewTool::OpenPath {
                     label: "文档".into(),
                     target: "%USERPROFILE%\\Documents".into(),
+                    icon: None,
                 }
                 .into_item()
                 .unwrap(),

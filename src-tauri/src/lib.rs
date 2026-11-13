@@ -1,14 +1,17 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod autostart;
 mod commands;
 mod config;
+#[cfg(windows)]
+mod file_drop;
 mod host;
 mod paths;
 mod plugins;
 mod runner;
 mod runners;
 mod state;
+mod template;
 mod tray;
 
 use std::error::Error;
@@ -26,6 +29,7 @@ pub fn run() {
             Some(vec![]),
         ))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             setup(app)?;
             Ok(())
@@ -34,9 +38,15 @@ pub fn run() {
             commands::get_snapshot,
             commands::add_bucket,
             commands::add_tool,
+            commands::update_tool,
             commands::remove_tool,
             commands::update_settings,
+            commands::update_style,
+            commands::run_filled,
             commands::set_anchor,
+            commands::set_shell_bounds,
+            commands::cursor_position,
+            commands::set_hit_rects,
             commands::run_item,
         ])
         .run(tauri::generate_context!())
