@@ -422,11 +422,8 @@ textarea {
   --glyph: #fff;
   --glyph-glow: drop-shadow(0 1px 1px rgba(16, 28, 64, 0.85));
   box-shadow:
-    inset 0 0 0 0.75px rgba(255, 255, 255, 0.7),
-    inset 0 -9px 14px -6px rgba(255, 255, 255, 0.45),
-    inset 0 7px 12px -8px rgba(30, 40, 70, 0.25),
-    0 8px 18px rgba(20, 30, 60, 0.2),
-    0 1px 3px rgba(20, 30, 60, 0.18);
+    0 10px 18px rgba(20, 30, 60, 0.22),
+    0 2px 4px rgba(20, 30, 60, 0.16);
 }
 
 .jewel.pearl {
@@ -478,59 +475,102 @@ textarea {
 
 .body.glass {
   background: radial-gradient(
-    120% 120% at 50% 115%,
-    rgba(255, 255, 255, 0.32),
-    rgba(235, 242, 255, 0.1) 55%,
+    100% 100% at 50% 50%,
+    rgba(255, 255, 255, 0.22),
+    rgba(232, 238, 248, 0.1) 58%,
     rgba(255, 255, 255, 0.16)
   );
 }
 
-.glass .rim {
-  background: conic-gradient(
-    from 210deg,
-    rgba(255, 255, 255, 0.95),
-    rgba(150, 200, 255, 0.55),
-    rgba(255, 255, 255, 0.15) 30%,
-    rgba(255, 170, 220, 0.5) 48%,
-    rgba(255, 255, 255, 0.9) 58%,
-    rgba(170, 255, 230, 0.45) 75%,
-    rgba(255, 255, 255, 0.95)
-  );
-  -webkit-mask: radial-gradient(closest-side, transparent 86%, #000 97%, transparent 100%);
-  mask: radial-gradient(closest-side, transparent 86%, #000 97%, transparent 100%);
-  opacity: 0.75;
+/* Light stays upper-left. Convex and concave are painted in place and only crossfade. */
+.glass .convex {
+  opacity: 1;
 }
 
-.glass .spec {
-  inset: 4.5% 16% auto;
-  height: 36%;
-  border-radius: 50% / 60% 60% 40% 40%;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.95),
-    rgba(255, 255, 255, 0.18) 70%,
-    rgba(255, 255, 255, 0)
-  );
-  transform-origin: 50% 180%;
-  transform: scale(1);
-}
-
-.glass .spec-press {
-  inset: 18% 30% auto;
-  height: 16%;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 72%);
+.glass .concave {
   opacity: 0;
 }
 
-.glass .caus {
-  background: radial-gradient(55% 35% at 50% 90%, rgba(255, 255, 255, 0.7), transparent 70%);
+.glass .shade.convex {
+  background: radial-gradient(
+    145% 145% at 22% 16%,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.2) 34%,
+    rgba(255, 255, 255, 0.02) 56%,
+    rgba(14, 24, 46, 0.28) 100%
+  );
+  box-shadow: inset -16px -18px 26px -10px rgba(10, 18, 38, 0.34);
+}
+
+.glass .glint.convex {
+  background: radial-gradient(
+    14% 10% at 30% 24%,
+    #fff 0%,
+    rgba(255, 255, 255, 0.82) 26%,
+    rgba(255, 255, 255, 0) 70%
+  );
+}
+
+.glass .lip.convex {
+  background: conic-gradient(
+    from 300deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(160, 205, 255, 0.55) 16%,
+    rgba(255, 255, 255, 0.16) 34%,
+    rgba(255, 175, 220, 0.4) 50%,
+    rgba(255, 255, 255, 0.18) 66%,
+    rgba(170, 255, 225, 0.34) 80%,
+    rgba(255, 255, 255, 0.92)
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent 84%, #000 97%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 84%, #000 97%, transparent 100%);
   opacity: 0.8;
 }
 
-.glass .caus-press {
-  background: radial-gradient(70% 32% at 50% 94%, rgba(255, 255, 255, 0.9), transparent 74%);
-  opacity: 0;
+.glass .shade.concave {
+  background:
+    radial-gradient(
+      72% 72% at 26% 22%,
+      rgba(6, 12, 26, 0.5) 0%,
+      rgba(6, 12, 26, 0.18) 46%,
+      rgba(6, 12, 26, 0) 70%
+    ),
+    radial-gradient(
+      88% 88% at 74% 78%,
+      rgba(255, 255, 255, 0.78) 0%,
+      rgba(255, 255, 255, 0.3) 36%,
+      rgba(255, 255, 255, 0) 66%
+    );
+  box-shadow:
+    inset 18px 20px 22px -8px rgba(6, 10, 24, 0.58),
+    inset -16px -18px 20px -8px rgba(255, 255, 255, 0.55);
+}
+
+.glass .glint.concave {
+  background: radial-gradient(
+    13% 10% at 64% 66%,
+    #fff 0%,
+    rgba(255, 255, 255, 0.72) 28%,
+    rgba(255, 255, 255, 0) 72%
+  );
+}
+
+.glass .lip.concave {
+  background: conic-gradient(
+    from 315deg,
+    rgba(255, 255, 255, 0.96) 0deg,
+    rgba(255, 255, 255, 0.28) 32deg,
+    rgba(255, 255, 255, 0) 64deg,
+    rgba(0, 0, 0, 0) 120deg,
+    rgba(5, 8, 18, 0.45) 168deg,
+    rgba(5, 8, 18, 0.7) 196deg,
+    rgba(5, 8, 18, 0.16) 236deg,
+    rgba(255, 255, 255, 0) 286deg,
+    rgba(255, 255, 255, 0.5) 332deg,
+    rgba(255, 255, 255, 0.96) 360deg
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent 91%, #000 97.5%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 91%, #000 97.5%, transparent 100%);
 }
 
 .body.pearl {
@@ -691,33 +731,17 @@ textarea {
 }
 
 .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) {
-  transform: scale(0.96);
+  transform: scale(0.975);
   box-shadow:
-    inset 0 14px 16px -8px rgba(18, 28, 52, 0.42),
-    inset 0 -12px 16px -6px rgba(255, 255, 255, 0.72),
-    inset 0 0 0 0.75px rgba(255, 255, 255, 0.45),
-    0 3px 8px rgba(20, 30, 60, 0.16),
-    0 1px 2px rgba(20, 30, 60, 0.12);
+    0 3px 7px rgba(20, 30, 60, 0.14),
+    0 1px 2px rgba(20, 30, 60, 0.1);
 }
 
-.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .rim {
-  opacity: 0.95;
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .convex {
+  opacity: 0;
 }
 
-.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec {
-  opacity: 0.2;
-  transform: scale(0.58);
-}
-
-.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec-press {
-  opacity: 1;
-}
-
-.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .caus {
-  opacity: 0.35;
-}
-
-.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .caus-press {
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .concave {
   opacity: 1;
 }
 
