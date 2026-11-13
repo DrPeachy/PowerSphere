@@ -551,6 +551,42 @@ textarea {
   opacity: 0.8;
 }
 
+.glass-gl {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.body.glass.webgl {
+  background: none;
+}
+
+.body.glass.webgl .glass-gl {
+  opacity: 1;
+}
+
+.body.glass.webgl .layer,
+.jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .body.glass.webgl .layer {
+  opacity: 0;
+}
+
+.jewel.glass:has(.body.glass.webgl) {
+  box-shadow:
+    0 8px 18px rgba(20, 30, 60, 0.2),
+    0 1px 3px rgba(20, 30, 60, 0.16);
+}
+
+.jewel.glass:has(.body.glass.webgl):is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    0 4px 10px rgba(20, 30, 60, 0.14),
+    0 1px 2px rgba(20, 30, 60, 0.12);
+}
+
 .body.pearl {
   overflow: hidden;
   background: radial-gradient(circle at 38% 30%, #fff 0, #f8f3f5 22%, #e9e1ea 52%, #d2c8d9 82%, #bdb3c6 100%);

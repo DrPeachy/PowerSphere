@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { mountLiquidGlass } from "./glassGl";
   import { resolveGlyph } from "./jewel";
 
   let {
@@ -10,6 +11,14 @@
   } = $props();
 
   let mark = $derived(resolveGlyph(sphereStyle ?? "glass", glyph));
+  let canvas = $state<HTMLCanvasElement | null>(null);
+
+  $effect(() => {
+    const node = canvas;
+    const glass = !sphereStyle || sphereStyle === "glass";
+    if (!node || !glass) return;
+    return mountLiquidGlass(node);
+  });
 </script>
 
 <div class="body glass" class:on={sphereStyle === "glass" || !sphereStyle}>
@@ -19,6 +28,7 @@
   <i class="layer spec-soft"></i>
   <i class="layer caustic"></i>
   <i class="layer lip-shadow"></i>
+  <canvas bind:this={canvas} class="glass-gl" aria-hidden="true"></canvas>
 </div>
 <div class="body pearl" class:on={sphereStyle === "pearl"}>
   <i class="layer iri"></i>
