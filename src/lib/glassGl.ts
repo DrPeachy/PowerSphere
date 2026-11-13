@@ -3,10 +3,9 @@
  * https://github.com/mrdoob/three.js/blob/r108/examples/js/shaders/FresnelShader.js
  * Copyright three.js authors. SPDX-License-Identifier: MIT
  *
- * Reflect, chromatic refract, and the Schlick fresnel mix follow that
- * shader. The mesh and cubemap are replaced by an analytic sphere and a
- * procedural environment, because this window cannot read the desktop.
- * There is no noise, blur, frost, stretch, or wobble.
+ * The fresnel term follows that shader. The sphere does not fill with a
+ * reflected environment: the center stays clear and only the rim, specular
+ * and caustic are drawn, so the wallpaper shows through.
  */
 
 const VERT = `#version 300 es
@@ -23,64 +22,57 @@ uniform float uCurve;
 
 out vec4 outColor;
 
-vec3 envMap(vec3 dir) {
-  vec3 d = normalize(dir);
-  float sky = d.y * 0.5 + 0.5;
-  vec3 c = mix(vec3(0.10, 0.16, 0.28), vec3(0.93, 0.96, 1.0), smoothstep(0.0, 1.0, sky));
-  float band = smoothstep(0.55, 0.05, abs(d.x * 0.85 + d.y * 0.25));
-  c = mix(c, vec3(0.08, 0.38, 0.95), band * 0.75);
-  c = mix(c, vec3(0.95, 0.28, 0.42), smoothstep(0.62, 0.05, length(d.xy - vec2(0.62, -0.42))));
-  c = mix(c, vec3(0.12, 0.75, 0.58), smoothstep(0.58, 0.05, length(d.xy - vec2(-0.55, 0.48))));
-  c = mix(c, vec3(1.0, 0.84, 0.32), smoothstep(0.5, 0.05, length(d.xz - vec2(-0.25, 0.6))));
-  return c;
-}
-
 void main() {
   vec2 center = uRes * 0.5;
-  float R = max(min(uRes.x, uRes.y) * 0.5 - 1.15, 1.0);
-  vec2 q = gl_FragCoord.xy - center;
-  vec2 p = q / R;
-  float r2 = dot(p, p);
-  float aa = 1.25 / R;
-  float inside = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, sqrt(r2));
-  if (inside < 0.002) {
+  float R = max(min(uRes.x, uRes.y) * 0.5 - 0.6, 1.0);
+  vec2 p = (gl_FragCoord.xy - center) / R;
+  float r = length(p);
+  if (r > 1.06) {
     outColor = vec4(0.0);
     return;
   }
 
-  float z = sqrt(max(1.0 - min(r2, 1.0), 0.0));
-  vec3 N = normalize(vec3(p * uCurve, max(z, 0.02)));
+  float z = sqrt(max(1.0 - min(r * r, 1.0), 0.0));
+  vec3 N = normalize(vec3(p * uCurve, max(z, 0.045)));
   vec3 I = vec3(0.0, 0.0, -1.0);
+  float fres = clamp(pow(1.0 + dot(I, N), 2.6), 0.0, 1.0);
+  float rimBand = smoothstep(0.90, 0.995, r) * (1.0 - smoothstep(1.0, 1.04, r));
+  float rim = fres * rimBand;
 
-  vec3 reflected = envMap(reflect(I, N));
-  vec3 refrR = refract(I, N, 0.74);
-  vec3 refrG = refract(I, N, 0.752);
-  vec3 refrB = refract(I, N, 0.766);
-  if (dot(refrR, refrR) < 0.001) refrR = reflect(I, N);
-  if (dot(refrG, refrG) < 0.001) refrG = reflect(I, N);
-  if (dot(refrB, refrB) < 0.001) refrB = reflect(I, N);
-  vec3 refracted = vec3(envMap(refrR).r, envMap(refrG).g, envMap(refrB).b);
+  float ang = atan(p.y, p.x);
+  vec3 chroma = vec3(0.62 + 0.38 * cos(ang + 0.2), 0.84, 0.62 + 0.38 * cos(ang + 2.4));
 
-  float fresnel = 0.06 + pow(1.0 + dot(I, N), 3.0);
-  fresnel = clamp(fresnel, 0.0, 1.0);
-  vec3 col = mix(refracted, reflected, fresnel);
+  vec3 L = normalize(vec3(-0.5, 0.62, 0.6));
+  float ndh = clamp(dot(N, normalize(L - I)), 0.0, 1.0);
+  float spec = pow(ndh, 240.0);
+  float specSoft = pow(ndh, 32.0) * 0.2;
 
-  vec3 L = normalize(vec3(-0.42, 0.58, 0.7));
-  vec3 H = normalize(L - I);
-  float ndh = clamp(dot(N, H), 0.0, 1.0);
-  float spec = pow(ndh, 160.0);
-  float specSoft = pow(ndh, 14.0) * 0.18;
-  col += vec3(spec + specSoft);
+  float arc = exp(-pow(ang + 0.9, 2.0) * 7.0);
+  float cauRad = smoothstep(0.64, 0.8, r) * (1.0 - smoothstep(0.9, 0.97, r));
+  float caustic = arc * cauRad;
 
-  vec2 cau = p - vec2(0.46, -0.52);
-  float caustic = exp(-dot(cau, cau) / 0.035) * smoothstep(0.2, 0.62, length(p));
-  col += vec3(0.72, 0.9, 1.0) * caustic * 0.85;
+  float contour = smoothstep(0.96, 0.992, r) * (1.0 - smoothstep(1.0, 1.04, r));
+  float ul = smoothstep(0.25, 0.95, dot(normalize(p + vec2(1e-4)), vec2(-0.62, 0.78)));
+  float shade = ul * smoothstep(0.8, 0.9, r) * (1.0 - smoothstep(0.92, 0.98, r));
 
-  float rim = smoothstep(0.9, 1.0, length(p));
-  col += rim * mix(vec3(0.03, 0.05, 0.09), vec3(1.0), fresnel);
+  vec3 rgb = vec3(spec);
+  float a = spec;
+  rgb += vec3(0.94, 0.97, 1.0) * specSoft;
+  a += specSoft;
+  rgb += vec3(0.9, 0.96, 1.0) * rim;
+  a += rim * 0.82;
+  rgb += chroma * rim * 0.4;
+  a += rim * 0.1;
+  rgb += vec3(0.8, 0.94, 1.0) * caustic;
+  a += caustic * 0.8;
 
-  float alpha = inside * clamp(0.045 + fresnel * 0.62 + spec * 0.95 + caustic * 0.4 + rim * 0.35, 0.0, 1.0);
-  outColor = vec4(min(col, vec3(1.0)) * alpha, alpha);
+  float darkA = contour * 0.32;
+  rgb += vec3(0.01, 0.015, 0.03) * darkA;
+  a += darkA;
+  float shadeA = shade * 0.06;
+  a += shadeA;
+
+  outColor = vec4(min(rgb, vec3(1.0)), clamp(a, 0.0, 1.0));
 }`;
 
 export const glassDrag = { active: false };
