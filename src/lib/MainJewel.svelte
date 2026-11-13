@@ -46,8 +46,8 @@
 </div>
 <div class="sigil power" class:on={mark === "power"}>
   <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path class="arc" pathLength="1" d="M7.2 8.1a5.6 5.6 0 1 0 9.6 0" />
-    <path class="stem" pathLength="1" d="M12 11.2V3.4" />
+    <path class="arc" pathLength="1" d="M8.01 7.25a6.2 6.2 0 1 0 7.98 0" />
+    <path class="stem" pathLength="1" d="M12 12V5.2" />
   </svg>
 </div>
 <div class="sigil spark" class:on={mark === "spark"} aria-hidden="true">
