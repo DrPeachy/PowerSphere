@@ -4,11 +4,10 @@
  * Copyright (c) 2026 Prasenjit (StarKnightt)
  * SPDX-License-Identifier: MIT
  *
- * The dome normal, the rim refraction bend, the chromatic split, the
- * Blinn specular and the Fresnel rim follow that shader. Cursor motion,
- * ripples, frost and the page-content texture are not used. Curvature is
- * a uniform (convex through slightly concave), and the refracted sample
- * is a procedural environment because this window cannot read the desktop.
+ * Dome normal, rim refraction, chromatic split, Blinn specular, Fresnel,
+ * and the velocity stretch / angular wobble / press scale follow that
+ * shader. The page texture is replaced by a procedural environment
+ * because this window cannot read the desktop behind it.
  */
 
 const VERT = `#version 300 es
@@ -21,69 +20,98 @@ const FRAG = `#version 300 es
 precision highp float;
 
 uniform vec2 uRes;
+uniform float uTime;
+uniform float uDpr;
 uniform float uCurve;
+uniform vec4 uMotion;
+uniform float uPress;
 
 out vec4 outColor;
 
 vec3 envAt(vec2 uv) {
   vec2 p = uv * 2.0 - 1.0;
-  float lift = 0.86 + 0.08 * p.y + 0.03 * p.x;
-  vec3 c = vec3(lift, lift + 0.008, lift + 0.03);
-  float cool = smoothstep(1.15, 0.05, length(p - vec2(-0.45, 0.55)));
-  float warm = smoothstep(1.25, 0.1, length(p - vec2(0.7, -0.6)));
-  c += vec3(0.01, 0.04, 0.08) * cool;
-  c += vec3(0.06, 0.02, 0.03) * warm;
+  vec3 c = vec3(0.9, 0.93, 0.98);
+  c = mix(c, vec3(0.16, 0.42, 0.98), smoothstep(0.62, 0.0, length(p - vec2(-0.55, 0.42))));
+  c = mix(c, vec3(0.98, 0.28, 0.48), smoothstep(0.52, 0.0, length(p - vec2(0.62, -0.38))));
+  c = mix(c, vec3(0.05, 0.72, 0.58), smoothstep(0.46, 0.0, length(p - vec2(0.12, 0.72))));
+  c = mix(c, vec3(1.0, 0.78, 0.22), smoothstep(0.4, 0.0, length(p - vec2(-0.72, -0.58))));
+  float band = smoothstep(0.07, 0.0, abs(p.x * 0.65 + p.y * 0.35 + 0.12));
+  c = mix(c, vec3(1.0), band * 0.9);
   return c;
 }
 
 void main() {
   vec2 frag = gl_FragCoord.xy;
   vec2 center = uRes * 0.5;
-  float R = min(uRes.x, uRes.y) * 0.5 - 1.25;
+  float margin = 20.0 * uDpr;
+  float R = max((min(uRes.x, uRes.y) - margin * 2.0) * 0.5, 1.0) * uPress;
+
   vec2 q = frag - center;
+  vec2 dir = uMotion.xy;
+  float stretch = uMotion.z;
+  if (stretch > 0.001 && dot(dir, dir) > 0.25) {
+    vec2 tangent = vec2(dir.y, -dir.x);
+    float along = dot(q, dir) / (1.0 + stretch);
+    float across = dot(q, tangent) * (1.0 + stretch * 0.5);
+    q = dir * along + tangent * across;
+  }
+
+  float ang = atan(q.y, q.x);
+  float wob = uMotion.w * (
+      0.030 * sin(ang * 3.0 + uTime * 2.1)
+    + 0.022 * sin(ang * 5.0 - uTime * 3.3)
+    + 0.014 * sin(ang * 7.0 + uTime * 4.7)
+  );
   float r = length(q);
-  float d = r - R;
-  float inside = smoothstep(1.25, -1.25, d);
+  float Rw = R * (1.0 + wob);
+  float d = r - Rw;
+  float aa = 1.5 * uDpr;
+  float inside = smoothstep(aa, -aa, d);
   if (inside < 0.002) {
     outColor = vec4(0.0);
     return;
   }
 
-  float r01 = clamp(r / max(R, 1.0), 0.0, 1.0);
+  float r01 = clamp(r / max(Rw, 1.0), 0.0, 1.0);
   float h = sqrt(max(1.0 - r01 * r01, 0.0));
-  vec3 N = normalize(vec3(uCurve * q / max(R, 1.0), max(h, 0.045) * 1.15));
-
+  vec3 N = normalize(vec3(uCurve * q / max(Rw, 1.0), max(h, 0.045) * 1.15));
   float bend = 1.0 - h;
-  vec2 refr = -N.xy * bend * 0.55 * R * 0.9;
-  float ca = 0.16 * 0.55;
-  vec2 base = center + q * 0.35;
-  vec3 tint = vec3(
-    envAt((base + refr * (1.0 + ca)) / uRes).r,
-    envAt((base + refr) / uRes).g,
-    envAt((base + refr * (1.0 - ca)) / uRes).b
+  vec2 refr = -N.xy * bend * 0.9 * R;
+  float ca = 0.22;
+  vec2 mfrag = center + q / 1.06;
+  vec3 glass = vec3(
+    envAt((mfrag + refr * (1.0 + ca)) / uRes).r,
+    envAt((mfrag + refr) / uRes).g,
+    envAt((mfrag + refr * (1.0 - ca)) / uRes).b
   );
 
   vec3 L = normalize(vec3(-0.35, 0.55, 0.75));
   vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
   float ndh = max(dot(N, H), 0.0);
-  float spec = pow(ndh, 18.0) * 0.62 + pow(ndh, 6.0) * 0.34;
-  float fres = pow(1.0 - clamp(N.z, 0.0, 1.0), 2.4);
-  float away = dot(normalize(N.xy + vec2(1e-4)), normalize(vec2(-0.55, 0.65)));
-  float shade = smoothstep(0.2, 1.0, -away) * 0.08;
+  float spec = pow(ndh, 90.0) * 0.95 + pow(ndh, 18.0) * 0.18;
+  float fres = pow(1.0 - clamp(N.z, 0.0, 1.0), 2.5);
+  glass += vec3(spec);
+  glass += fres * vec3(0.78, 0.9, 1.0) * 0.55;
+  glass += smoothstep(aa * 2.5, 0.0, abs(d)) * 0.38;
 
-  vec3 rgb = mix(vec3(0.97, 0.98, 1.0), tint, 0.06 + fres * 0.42);
-  rgb *= 1.0 - shade;
-  rgb += vec3(spec);
-  rgb += fres * vec3(0.62, 0.78, 0.96);
-  rgb += smoothstep(2.2, 0.0, abs(d)) * 0.18;
-
-  float alpha = inside * clamp(0.2 + fres * 0.58 + spec * 0.72, 0.0, 1.0);
-  outColor = vec4(min(rgb, vec3(1.0)) * alpha, alpha);
+  float cover = inside * clamp(0.04 + bend * 0.78 + fres * 0.5 + spec * 0.85, 0.0, 1.0);
+  outColor = vec4(min(glass, vec3(1.0)) * cover, cover);
 }`;
 
+/** Screen-space drag velocity in CSS px/s. y grows downward. */
+export const glassDrag = { active: false, vx: 0, vy: 0 };
+
+const dragListeners = new Set<() => void>();
+
+export function setGlassDrag(active: boolean, vx = 0, vy = 0) {
+  glassDrag.active = active;
+  glassDrag.vx = vx;
+  glassDrag.vy = vy;
+  for (const listener of dragListeners) listener();
+}
+
 const IDLE_CURVE = 1;
-const PRESSED_CURVE = -0.28;
-const TAU = 0.07;
+const PRESSED_CURVE = -0.22;
 
 export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
   const host = canvas.closest(".jewel");
@@ -93,11 +121,25 @@ export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
   let disposed = false;
   let raf = 0;
   let gl: WebGL2RenderingContext | null = null;
-  let curve = IDLE_CURVE;
-  let target = IDLE_CURVE;
-  let last = 0;
   let resLoc: WebGLUniformLocation | null = null;
+  let timeLoc: WebGLUniformLocation | null = null;
+  let dprLoc: WebGLUniformLocation | null = null;
   let curveLoc: WebGLUniformLocation | null = null;
+  let motionLoc: WebGLUniformLocation | null = null;
+  let pressLoc: WebGLUniformLocation | null = null;
+
+  let curve = IDLE_CURVE;
+  let curveTarget = IDLE_CURVE;
+  let press = 1;
+  let pressVel = 0;
+  let dirX = 0;
+  let dirY = 1;
+  let stretch = 0;
+  let wobble = 0;
+  let wobbleVel = 0;
+  let last = 0;
+  let time0 = 0;
+  let wasPressed = false;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const stop = () => {
@@ -105,7 +147,24 @@ export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
     raf = 0;
   };
 
-  const draw = () => {
+  const draw = (time: number, dpr: number) => {
+    if (!gl) return;
+    gl.uniform2f(resLoc, canvas.width, canvas.height);
+    gl.uniform1f(timeLoc, time);
+    gl.uniform1f(dprLoc, dpr);
+    gl.uniform1f(curveLoc, curve);
+    gl.uniform4f(motionLoc, dirX, dirY, stretch, wobble);
+    gl.uniform1f(pressLoc, press);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    canvas.dataset.curve = curve.toFixed(3);
+    canvas.dataset.stretch = stretch.toFixed(3);
+    canvas.dataset.wobble = wobble.toFixed(3);
+    canvas.dataset.press = press.toFixed(3);
+  };
+
+  const resize = () => {
     if (!gl || disposed) return false;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = canvas.getBoundingClientRect();
@@ -117,12 +176,6 @@ export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
       canvas.height = h;
     }
     gl.viewport(0, 0, w, h);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.uniform2f(resLoc, w, h);
-    gl.uniform1f(curveLoc, curve);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    canvas.dataset.curve = curve.toFixed(3);
     return true;
   };
 
@@ -145,8 +198,12 @@ export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
     gl.useProgram(prog);
     resLoc = gl.getUniformLocation(prog, "uRes");
+    timeLoc = gl.getUniformLocation(prog, "uTime");
+    dprLoc = gl.getUniformLocation(prog, "uDpr");
     curveLoc = gl.getUniformLocation(prog, "uCurve");
-    return resLoc !== null && curveLoc !== null;
+    motionLoc = gl.getUniformLocation(prog, "uMotion");
+    pressLoc = gl.getUniformLocation(prog, "uPress");
+    return resLoc !== null && curveLoc !== null && motionLoc !== null && pressLoc !== null;
   };
 
   const fail = () => {
@@ -155,50 +212,78 @@ export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
     gl = null;
   };
 
-  if (!boot() || !draw()) {
+  const moving = () =>
+    glassDrag.active ||
+    Math.abs(curve - curveTarget) > 0.004 ||
+    Math.abs(press - (host.matches(":hover") || host.matches(":focus-visible") ? 0.94 : 1)) > 0.004 ||
+    Math.abs(pressVel) > 0.01 ||
+    stretch > 0.004 ||
+    wobble > 0.004 ||
+    Math.abs(wobbleVel) > 0.01;
+
+  const tick = (now: number) => {
+    if (disposed || !gl) return;
+    const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+    last = now;
+    const pressed =
+      host.matches(":hover") ||
+      host.matches(":focus-visible") ||
+      host.getAttribute("aria-pressed") === "true";
+    curveTarget = pressed ? PRESSED_CURVE : IDLE_CURVE;
+    if (reduce) {
+      curve = curveTarget;
+      press = pressed ? 0.94 : 1;
+      stretch = 0;
+      wobble = 0;
+      wobbleVel = 0;
+    } else {
+      curve += (curveTarget - curve) * (1 - Math.exp(-dt / 0.07));
+      const pressTarget = pressed && !glassDrag.active ? 0.94 : 1;
+      pressVel += (pressTarget - press) * 70 * dt;
+      pressVel *= Math.exp(-7 * dt);
+      press += pressVel * dt;
+      if (pressed && !wasPressed) wobbleVel += 0.65;
+      const vx = glassDrag.vx;
+      const vy = -glassDrag.vy;
+      const speed = Math.hypot(vx, vy);
+      if (speed > 12) {
+        dirX = vx / speed;
+        dirY = vy / speed;
+      }
+      const stretchTarget = glassDrag.active ? Math.min(speed / 1100, 0.28) : 0;
+      stretch += (stretchTarget - stretch) * (1 - Math.exp(-12 * dt));
+      const wobbleTarget = glassDrag.active ? Math.min(speed / 900, 0.8) : 0;
+      wobbleVel += (wobbleTarget - wobble) * 36 * dt;
+      wobbleVel *= Math.exp(-3.4 * dt);
+      wobble += wobbleVel * dt;
+      wobble = Math.max(0, Math.min(wobble, 1.1));
+    }
+    wasPressed = pressed;
+    if (!resize()) return;
+    draw((now - time0) / 1000, Math.min(window.devicePixelRatio || 1, 2));
+    if (moving()) raf = requestAnimationFrame(tick);
+    else {
+      curve = curveTarget;
+      draw((now - time0) / 1000, Math.min(window.devicePixelRatio || 1, 2));
+      raf = 0;
+    }
+  };
+
+  const kick = () => {
+    if (disposed || !gl || raf) return;
+    last = performance.now();
+    raf = requestAnimationFrame(tick);
+  };
+
+  if (!boot() || !resize()) {
     fail();
     return () => {
       disposed = true;
     };
   }
+  time0 = performance.now();
+  draw(0, Math.min(window.devicePixelRatio || 1, 2));
   body.classList.add("webgl");
-
-  const kick = () => {
-    if (disposed || !gl) return;
-    if (reduce) {
-      curve = target;
-      draw();
-      return;
-    }
-    if (raf) return;
-    last = performance.now();
-    raf = requestAnimationFrame(tick);
-  };
-
-  const tick = (now: number) => {
-    if (disposed || !gl) return;
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    curve += (target - curve) * (1 - Math.exp(-dt / TAU));
-    draw();
-    if (Math.abs(target - curve) > 0.004) raf = requestAnimationFrame(tick);
-    else {
-      curve = target;
-      draw();
-      raf = 0;
-    }
-  };
-
-  const sync = () => {
-    const pressed =
-      host.matches(":hover") ||
-      host.matches(":focus-visible") ||
-      host.getAttribute("aria-pressed") === "true";
-    const next = pressed ? PRESSED_CURVE : IDLE_CURVE;
-    if (next === target && !raf) return;
-    target = next;
-    kick();
-  };
 
   const onLost = (event: Event) => {
     event.preventDefault();
@@ -206,33 +291,34 @@ export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
   };
   const onRestored = () => {
     if (disposed) return;
-    if (!boot() || !draw()) fail();
-    else body.classList.add("webgl");
+    if (!boot() || !resize()) fail();
+    else {
+      body.classList.add("webgl");
+      draw(0, Math.min(window.devicePixelRatio || 1, 2));
+    }
   };
-
-  const observer = new MutationObserver(sync);
-  observer.observe(host, { attributes: true, attributeFilter: ["aria-pressed"] });
   const ro = new ResizeObserver(() => {
     if (!gl) return;
-    draw();
+    if (resize()) draw((performance.now() - time0) / 1000, Math.min(window.devicePixelRatio || 1, 2));
   });
   ro.observe(canvas);
-  host.addEventListener("pointerenter", sync);
-  host.addEventListener("pointerleave", sync);
-  host.addEventListener("focusin", sync);
-  host.addEventListener("focusout", sync);
+  dragListeners.add(kick);
+  host.addEventListener("pointerenter", kick);
+  host.addEventListener("pointerleave", kick);
+  host.addEventListener("pointerdown", kick);
+  host.addEventListener("pointerup", kick);
   canvas.addEventListener("webglcontextlost", onLost);
   canvas.addEventListener("webglcontextrestored", onRestored);
 
   return () => {
     disposed = true;
     stop();
-    observer.disconnect();
     ro.disconnect();
-    host.removeEventListener("pointerenter", sync);
-    host.removeEventListener("pointerleave", sync);
-    host.removeEventListener("focusin", sync);
-    host.removeEventListener("focusout", sync);
+    dragListeners.delete(kick);
+    host.removeEventListener("pointerenter", kick);
+    host.removeEventListener("pointerleave", kick);
+    host.removeEventListener("pointerdown", kick);
+    host.removeEventListener("pointerup", kick);
     canvas.removeEventListener("webglcontextlost", onLost);
     canvas.removeEventListener("webglcontextrestored", onRestored);
     body.classList.remove("webgl");

@@ -25,8 +25,10 @@
     type ClusterMode,
     type Layout,
     type Placement,
+    type SphereNode,
     type WorkArea,
   } from "./lib/layout";
+  import { setGlassDrag } from "./lib/glassGl";
   import { normalizeStyle, resolveGlyph } from "./lib/jewel";
   import { mergePlaceholders, parseTemplate } from "./lib/template";
   import type { AppSnapshot, Bucket, ToolItem } from "./lib/types";
@@ -69,7 +71,9 @@
     grabY: number;
     os: boolean;
     moved: boolean;
+    lastT: number;
   } | null = null;
+  let ghostActions = $state<SphereNode[]>([]);
   let cursorBusy = false;
   let cursorAgain = false;
   let suppressClick = false;
@@ -102,6 +106,17 @@
   let fillItem = $derived(findItem(buckets, fill?.bucketId, fill?.itemId));
   let sphereLook = $derived(normalizeStyle(snapshot?.config.style?.sphereStyle));
   let sphereGlyph = $derived(resolveGlyph(sphereLook, snapshot?.config.style?.centerGlyph));
+  let shown = $derived.by(() => {
+    const live = layout.nodes.map((node) => ({
+      ...node,
+      open: node.kind === "main" || (node.kind === "action" ? mode === "actions" : mode !== "idle"),
+    }));
+    const keys = new Set(live.map((node) => node.key));
+    const extra = ghostActions
+      .filter((node) => !keys.has(node.key))
+      .map((node) => ({ ...node, open: false }));
+    return [...live, ...extra];
+  });
   let noticePos = $derived.by(() => {
     const gap = 8;
     const radius = metrics.main / 2;
@@ -322,6 +337,29 @@
     }, 220);
   }
 
+  $effect(() => {
+    const actions = layout.nodes.filter((node) => node.kind === "action");
+    if (actions.length === 0) {
+      return;
+    }
+    const incoming = new Set(actions.map((node) => node.key));
+    const kept = ghostActions.filter((node) => !incoming.has(node.key));
+    const next = [...actions, ...kept];
+    const same =
+      next.length === ghostActions.length &&
+      next.every((node, index) => node.key === ghostActions[index]?.key && node.left === ghostActions[index]?.left && node.top === ghostActions[index]?.top);
+    if (!same) {
+      ghostActions = next.map((node) => ({ ...node }));
+    }
+  });
+
+  function retireAction(key: string) {
+    if (layout.nodes.some((node) => node.key === key)) {
+      return;
+    }
+    ghostActions = ghostActions.filter((node) => node.key !== key);
+  }
+
   function showBuckets() {
     if (dragging) {
       return;
@@ -467,6 +505,7 @@
       grabY: 0,
       os: false,
       moved: false,
+      lastT: performance.now(),
     };
     if (!preview) {
       const current = drag;
@@ -498,20 +537,33 @@
     if (!drag || event.pointerId !== drag.pointerId) {
       return;
     }
+    const prevSx = drag.lastSx;
+    const prevSy = drag.lastSy;
     drag.lastSx = event.screenX;
     drag.lastSy = event.screenY;
     const delta = screenDelta(event);
     if (!drag.moved && Math.hypot(delta.x, delta.y) < 4) {
       return;
     }
+    const now = performance.now();
+    const step = Math.max(0.008, (now - drag.lastT) / 1000);
+    const unit = window.devicePixelRatio || 1;
+    drag.lastT = now;
     if (!drag.moved) {
       drag.moved = true;
       dragging = true;
+      mode = "idle";
+      activeBucketId = null;
       lockedPlacement = placement;
+      if (collapseTimer) {
+        clearTimeout(collapseTimer);
+        collapseTimer = undefined;
+      }
       if (!preview) {
         setDragLock(true);
       }
     }
+    setGlassDrag(true, (event.screenX - prevSx) / unit / step, (event.screenY - prevSy) / unit / step);
     if (!preview && drag.os) {
       void pullCursor();
       return;
@@ -528,6 +580,7 @@
     drag = null;
     dragging = false;
     lockedPlacement = null;
+    setGlassDrag(false);
     if (moved) {
       suppressClick = true;
       void finishDrag();
@@ -640,7 +693,7 @@
   onpointerleave={scheduleCollapse}
   oncontextmenu={(event) => event.preventDefault()}
 >
-  {#each layout.nodes as node (node.key)}
+  {#each shown as node (node.key)}
     {@const focused =
       (node.kind === "bucket" || node.kind === "settings") && node.bucketId === activeBucketId}
     {@const dim =
@@ -649,8 +702,15 @@
       node.bucketId !== activeBucketId}
     <div
       class="orb {node.kind}"
+      class:open={node.open}
       class:dim
       class:focused
+      ontransitionend={(event) => {
+        if (event.propertyName !== "opacity" || node.kind !== "action" || node.open) {
+          return;
+        }
+        retireAction(node.key);
+      }}
       style:left="{node.left}px"
       style:top="{node.top}px"
       style:width="{node.size}px"

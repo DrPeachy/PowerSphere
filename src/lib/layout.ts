@@ -208,7 +208,6 @@ export function computeLayout(
   const child = bucketSize(metrics);
   const action = actionSize(metrics);
   const labelAbove = placement.edge === "bottom";
-  const showChildren = mode !== "idle";
   const active =
     mode === "actions" && !panel
       ? buckets.find((bucket) => bucket.id === activeBucketId)
@@ -243,23 +242,21 @@ export function computeLayout(
       cy: 0,
     },
   ];
-  if (showChildren) {
-    for (const entry of children) {
-      boxes.push({
-        key: entry.key,
-        kind: entry.kind,
-        bucketId: entry.bucketId,
-        label: entry.label,
-        left: 0,
-        top: 0,
-        size: entry.size,
-        delay: boxes.length,
-        fromX: -alongFrom.x * 10,
-        fromY: -alongFrom.y * 10,
-        cx: entry.cx,
-        cy: entry.cy,
-      });
-    }
+  for (const entry of children) {
+    boxes.push({
+      key: entry.key,
+      kind: entry.kind,
+      bucketId: entry.bucketId,
+      label: entry.label,
+      left: 0,
+      top: 0,
+      size: entry.size,
+      delay: boxes.length,
+      fromX: -alongFrom.x * 10,
+      fromY: -alongFrom.y * 10,
+      cx: entry.cx,
+      cy: entry.cy,
+    });
   }
   if (active) {
     const host = children.find((entry) => entry.bucketId === active.id);

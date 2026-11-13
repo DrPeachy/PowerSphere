@@ -61,10 +61,28 @@ button {
 }
 
 .orb:not(.main) {
-  animation: sphere-in var(--motion, 220ms) var(--ease) backwards;
+  opacity: 0;
+  transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.94);
+  pointer-events: none;
+  transition:
+    transform var(--motion, 220ms) var(--ease),
+    opacity var(--motion, 220ms) var(--ease);
 }
 
-.orb.dim {
+.orb:not(.main).open {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  pointer-events: auto;
+}
+
+@starting-style {
+  .orb:not(.main).open {
+    opacity: 0;
+    transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.94);
+  }
+}
+
+.orb:not(.main).open.dim {
   opacity: var(--dim, 0.38);
 }
 
@@ -553,10 +571,10 @@ textarea {
 
 .glass-gl {
   position: absolute;
-  inset: 0;
+  inset: -20px;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: calc(100% + 40px);
+  height: calc(100% + 40px);
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
