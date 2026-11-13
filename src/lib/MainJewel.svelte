@@ -14,8 +14,10 @@
 
 <div class="body glass" class:on={sphereStyle === "glass" || !sphereStyle}>
   <i class="layer caus"></i>
+  <i class="layer caus-press"></i>
   <i class="layer rim"></i>
   <i class="layer spec"></i>
+  <i class="layer spec-press"></i>
 </div>
 <div class="body pearl" class:on={sphereStyle === "pearl"}>
   <i class="layer iri"></i>
