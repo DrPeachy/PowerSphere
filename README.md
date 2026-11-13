@@ -213,4 +213,4 @@ examples/config.example.json 示例配置，不是首次安装的默认值
 
 ## 许可
 
-[GNU GPL v3](LICENSE)。液态玻璃球体改编自 Prasenjit（StarKnightt）的 MIT 着色器，出处和许可全文在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+[GNU GPL v3](LICENSE)。液态玻璃球体改编自 three.js 的 FresnelShader（MIT），出处和许可全文在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

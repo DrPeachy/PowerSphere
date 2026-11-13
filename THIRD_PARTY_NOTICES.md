@@ -1,24 +1,23 @@
 # Third-party notices
 
-## Liquid Glass
+## Fresnel glass sphere
 
 The 液态玻璃 main-sphere shader in `src/lib/glassGl.ts` is adapted from
-[Liquid Glass](https://github.com/StarKnightt/liquid-glass) by Prasenjit (StarKnightt).
+three.js `FresnelShader` by alteredq.
 
-- Source: https://github.com/StarKnightt/liquid-glass
-- File: `src/components/ui/liquid-glass.tsx`
-- Copyright (c) 2026 Prasenjit (StarKnightt)
+- Source: https://github.com/mrdoob/three.js/blob/r108/examples/js/shaders/FresnelShader.js
+- Copyright three.js authors
 - License: MIT
 
-The dome normal, rim refraction, chromatic split, Blinn specular and Fresnel
-rim follow that shader. This project drops the cursor motion, ripples, frost
-and page-texture sample, and adds a curvature uniform plus a procedural
-environment.
+The reflection vector, the three-index chromatic refraction, and the
+fresnel mix of reflected and refracted color follow that shader. The
+original mesh and cubemap sample are replaced here by an analytic sphere
+and a procedural environment.
 
 ```
 MIT License
 
-Copyright (c) 2026 Prasenjit (StarKnightt)
+Copyright (c) 2010-2023 three.js Authors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

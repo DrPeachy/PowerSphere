@@ -71,7 +71,6 @@
     grabY: number;
     os: boolean;
     moved: boolean;
-    lastT: number;
   } | null = null;
   let ghostActions = $state<SphereNode[]>([]);
   let cursorBusy = false;
@@ -461,6 +460,9 @@
   }
 
   function togglePanel() {
+    if (dragging) {
+      return;
+    }
     if (editor) {
       closePanels();
       return;
@@ -473,6 +475,9 @@
   }
 
   function openSettings() {
+    if (dragging) {
+      return;
+    }
     editor = null;
     fill = null;
     settingsOpen = true;
@@ -480,6 +485,9 @@
   }
 
   function openEditor(bucketId: string, itemId: string) {
+    if (dragging) {
+      return;
+    }
     fill = null;
     settingsOpen = false;
     editor = { bucketId, itemId };
@@ -505,7 +513,6 @@
       grabY: 0,
       os: false,
       moved: false,
-      lastT: performance.now(),
     };
     if (!preview) {
       const current = drag;
@@ -537,21 +544,18 @@
     if (!drag || event.pointerId !== drag.pointerId) {
       return;
     }
-    const prevSx = drag.lastSx;
-    const prevSy = drag.lastSy;
     drag.lastSx = event.screenX;
     drag.lastSy = event.screenY;
     const delta = screenDelta(event);
     if (!drag.moved && Math.hypot(delta.x, delta.y) < 4) {
       return;
     }
-    const now = performance.now();
-    const step = Math.max(0.008, (now - drag.lastT) / 1000);
-    const unit = window.devicePixelRatio || 1;
-    drag.lastT = now;
     if (!drag.moved) {
       drag.moved = true;
       dragging = true;
+      editor = null;
+      fill = null;
+      settingsOpen = false;
       mode = "idle";
       activeBucketId = null;
       lockedPlacement = placement;
@@ -563,7 +567,7 @@
         setDragLock(true);
       }
     }
-    setGlassDrag(true, (event.screenX - prevSx) / unit / step, (event.screenY - prevSy) / unit / step);
+    setGlassDrag(true);
     if (!preview && drag.os) {
       void pullCursor();
       return;
