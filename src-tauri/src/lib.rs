@@ -3,6 +3,8 @@
 mod autostart;
 mod commands;
 mod config;
+#[cfg(windows)]
+mod file_drop;
 mod host;
 mod paths;
 mod plugins;

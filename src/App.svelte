@@ -223,7 +223,11 @@
     let cancelled = false;
     let stopListening = () => {};
     const onDocPointerDown = (event: PointerEvent) => onStagePointerDown(event);
+    const onDocDragOver = (event: DragEvent) => onFileDragOver(event);
+    const onDocDrop = (event: DragEvent) => onFileDrop(event);
     document.addEventListener("pointerdown", onDocPointerDown);
+    document.addEventListener("dragover", onDocDragOver);
+    document.addEventListener("drop", onDocDrop);
     if (preview) {
       document.body.classList.add("preview");
       work = viewportWork();
@@ -242,6 +246,8 @@
       ready = true;
       return () => {
         document.removeEventListener("pointerdown", onDocPointerDown);
+        document.removeEventListener("dragover", onDocDragOver);
+        document.removeEventListener("drop", onDocDrop);
         window.removeEventListener("resize", onResize);
       };
     }
@@ -298,21 +304,19 @@
         const stopDrop = await getCurrentWebview().onDragDropEvent((event) => {
           const payload = event.payload;
           if (payload.type === "leave") {
-            fileDragActive = false;
-            fileOver = false;
+            noteFileDrag("leave");
             return;
           }
-          const point = toClientPoint(payload.position.x, payload.position.y);
-          const hot = !dragging && overMainSphere(point.x, point.y);
-          fileDragActive = true;
-          fileOver = hot;
-          if (payload.type === "drop") {
-            fileDragActive = false;
-            fileOver = false;
-            if (hot) {
-              void acceptDroppedFiles(payload.paths);
-            }
-          }
+          noteFileDrag(payload.type, "paths" in payload ? payload.paths : [], payload.position.x, payload.position.y);
+        });
+        const unlistenFileDrag = await listen<{
+          kind: "enter" | "over" | "drop" | "leave";
+          paths: string[];
+          x: number;
+          y: number;
+        }>("powersphere://file-drag", (event) => {
+          const payload = event.payload;
+          noteFileDrag(payload.kind, payload.paths, payload.x, payload.y);
         });
         const stopFocus = await getCurrentWindow().onFocusChanged((event) => {
           if (!event.payload) {
@@ -323,6 +327,7 @@
           unlisten();
           stopMoves();
           stopDrop();
+          unlistenFileDrag();
           stopFocus();
         };
       }
@@ -330,6 +335,8 @@
     return () => {
       cancelled = true;
       document.removeEventListener("pointerdown", onDocPointerDown);
+      document.removeEventListener("dragover", onDocDragOver);
+      document.removeEventListener("drop", onDocDrop);
       stopListening();
       if (noticeTimer) {
         clearTimeout(noticeTimer);
@@ -747,6 +754,69 @@
     return { x: physicalX / scale, y: physicalY / scale };
   }
 
+  function noteFileDrag(kind: string, paths: string[] = [], physicalX = 0, physicalY = 0) {
+    if (kind === "leave") {
+      fileDragActive = false;
+      fileOver = false;
+      scheduleCollapse();
+      return;
+    }
+    const point = toClientPoint(physicalX, physicalY);
+    const hot = !dragging && overMainSphere(point.x, point.y);
+    fileDragActive = kind !== "drop";
+    fileOver = hot && kind !== "drop";
+    if (hot && kind !== "drop") {
+      showBuckets();
+    }
+    if (kind === "drop") {
+      fileDragActive = false;
+      fileOver = false;
+      if (hot) {
+        void acceptDroppedFiles(paths);
+      }
+    }
+  }
+
+  function onFileDragOver(event: DragEvent) {
+    if (dragging) {
+      return;
+    }
+    const hot = overMainSphere(event.clientX, event.clientY);
+    if (!hot) {
+      if (!inTauri()) {
+        fileOver = false;
+      }
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    fileOver = true;
+    showBuckets();
+  }
+
+  function onFileDrop(event: DragEvent) {
+    const hot = overMainSphere(event.clientX, event.clientY);
+    if (!hot) {
+      fileOver = false;
+      return;
+    }
+    event.preventDefault();
+    fileOver = false;
+    fileDragActive = false;
+    if (inTauri()) {
+      return;
+    }
+    const files = [...(event.dataTransfer?.files ?? [])];
+    void acceptDroppedFiles(
+      files.map((file) => {
+        const withPath = file as File & { path?: string };
+        return withPath.path || file.name;
+      }),
+    );
+  }
+
   async function acceptDroppedFiles(paths: string[]) {
     const list = buckets;
     const nav = navigationBucket(list);
@@ -792,36 +862,6 @@
     } else if (skipped > 0) {
       showNotice("这些文件已经在列表里");
     }
-  }
-
-  function onPreviewDragOver(event: DragEvent) {
-    if (!preview || dragging) {
-      return;
-    }
-    event.preventDefault();
-    fileOver = overMainSphere(event.clientX, event.clientY);
-  }
-
-  function onPreviewDragLeave() {
-    fileOver = false;
-  }
-
-  function onPreviewDrop(event: DragEvent) {
-    if (!preview) {
-      return;
-    }
-    event.preventDefault();
-    const hot = fileOver;
-    fileOver = false;
-    if (!hot) {
-      return;
-    }
-    const files = [...(event.dataTransfer?.files ?? [])];
-    const paths = files.map((file) => {
-      const withPath = file as File & { path?: string };
-      return withPath.path || file.name;
-    });
-    void acceptDroppedFiles(paths);
   }
 
   function findItem(list: Bucket[], bucketId?: string, itemId?: string): ToolItem | undefined {
@@ -888,9 +928,6 @@
           onpointermove={onMainPointerMove}
           onpointerup={onMainPointerUp}
           onclick={onMainClick}
-          ondragover={onPreviewDragOver}
-          ondragleave={onPreviewDragLeave}
-          ondrop={onPreviewDrop}
         >
           <MainJewel sphereStyle={sphereLook} glyph={sphereGlyph} />
         </button>
