@@ -169,25 +169,41 @@ export async function updateStyle(style: StyleSettings): Promise<AppSnapshot> {
   return invoke<AppSnapshot>("update_style", { style });
 }
 
+let dialogDepth = 0;
+
+export function isNativeDialogOpen(): boolean {
+  return dialogDepth > 0;
+}
+
 export async function pickPath(
   directory: boolean,
   filters?: { name: string; extensions: string[] }[],
 ): Promise<string | null> {
   if (!inTauri()) {
-    const value = window.prompt(directory ? "文件夹路径" : "文件路径");
-    const trimmed = value?.trim();
-    return trimmed ? trimmed : null;
+    dialogDepth += 1;
+    try {
+      const value = window.prompt(directory ? "文件夹路径" : "文件路径");
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : null;
+    } finally {
+      dialogDepth -= 1;
+    }
   }
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const selected = await open({
-    directory,
-    multiple: false,
-    filters: filters && filters.length > 0 ? filters : undefined,
-  });
-  if (selected === null) {
-    return null;
+  dialogDepth += 1;
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({
+      directory,
+      multiple: false,
+      filters: filters && filters.length > 0 ? filters : undefined,
+    });
+    if (selected === null) {
+      return null;
+    }
+    return Array.isArray(selected) ? selected[0] : selected;
+  } finally {
+    dialogDepth -= 1;
   }
-  return Array.isArray(selected) ? selected[0] : selected;
 }
 
 export async function setShellBounds(bounds: {

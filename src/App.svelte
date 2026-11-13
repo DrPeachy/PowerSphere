@@ -5,14 +5,25 @@
   import FillPanel from "./lib/FillPanel.svelte";
   import SettingsPanel from "./lib/SettingsPanel.svelte";
   import {
+    addTool,
     getSnapshot,
     inTauri,
+    isNativeDialogOpen,
     messageFrom,
     runFilled,
     runItem,
     setAnchor,
     setHitRects,
   } from "./lib/api";
+  import {
+    batchBucket,
+    isBatchPath,
+    labelFromPath,
+    navigationBucket,
+    normalizePath,
+    overMainSphere,
+    usedTargets,
+  } from "./lib/fileDrop";
   import {
     choosePlacement,
     computeLayout,
@@ -80,6 +91,9 @@
   let pinX = 0;
   let pinY = 0;
   let holding = $state(false);
+  let fileOver = $state(false);
+  let fileDragActive = false;
+  let panelOpenedAt = 0;
   let placed: { cx: number; cy: number; w: number; h: number } | null = null;
   let layoutGen = 0;
 
@@ -208,6 +222,8 @@
   onMount(() => {
     let cancelled = false;
     let stopListening = () => {};
+    const onDocPointerDown = (event: PointerEvent) => onStagePointerDown(event);
+    document.addEventListener("pointerdown", onDocPointerDown);
     if (preview) {
       document.body.classList.add("preview");
       work = viewportWork();
@@ -224,7 +240,10 @@
       };
       window.addEventListener("resize", onResize);
       ready = true;
-      return () => window.removeEventListener("resize", onResize);
+      return () => {
+        document.removeEventListener("pointerdown", onDocPointerDown);
+        window.removeEventListener("resize", onResize);
+      };
     }
 
     void (async () => {
@@ -274,14 +293,43 @@
             await setAnchor(next);
           },
         );
+        const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const stopDrop = await getCurrentWebview().onDragDropEvent((event) => {
+          const payload = event.payload;
+          if (payload.type === "leave") {
+            fileDragActive = false;
+            fileOver = false;
+            return;
+          }
+          const point = toClientPoint(payload.position.x, payload.position.y);
+          const hot = !dragging && overMainSphere(point.x, point.y);
+          fileDragActive = true;
+          fileOver = hot;
+          if (payload.type === "drop") {
+            fileDragActive = false;
+            fileOver = false;
+            if (hot) {
+              void acceptDroppedFiles(payload.paths);
+            }
+          }
+        });
+        const stopFocus = await getCurrentWindow().onFocusChanged((event) => {
+          if (!event.payload) {
+            dismissPanelsFromOutside();
+          }
+        });
         stopListening = () => {
           unlisten();
           stopMoves();
+          stopDrop();
+          stopFocus();
         };
       }
     })();
     return () => {
       cancelled = true;
+      document.removeEventListener("pointerdown", onDocPointerDown);
       stopListening();
       if (noticeTimer) {
         clearTimeout(noticeTimer);
@@ -449,6 +497,10 @@
     }
   }
 
+  function markPanelOpened() {
+    panelOpenedAt = performance.now();
+  }
+
   function closePanels() {
     editor = null;
     fill = null;
@@ -457,6 +509,19 @@
       mode = "idle";
       activeBucketId = null;
     }
+  }
+
+  function dismissPanelsFromOutside() {
+    if (dragging || isNativeDialogOpen()) {
+      return;
+    }
+    if (performance.now() - panelOpenedAt < 280) {
+      return;
+    }
+    if (!editor && !settingsOpen && !fill) {
+      return;
+    }
+    closePanels();
   }
 
   function togglePanel() {
@@ -472,6 +537,7 @@
     editor = { bucketId: buckets[0]?.id ?? "" };
     activeBucketId = null;
     mode = "buckets";
+    markPanelOpened();
   }
 
   function openSettings() {
@@ -482,6 +548,7 @@
     fill = null;
     settingsOpen = true;
     mode = "buckets";
+    markPanelOpened();
   }
 
   function openEditor(bucketId: string, itemId: string) {
@@ -492,10 +559,11 @@
     settingsOpen = false;
     editor = { bucketId, itemId };
     mode = "buckets";
+    markPanelOpened();
   }
 
   function onMainPointerDown(event: PointerEvent) {
-    if (event.button !== 0) {
+    if (event.button !== 0 || fileDragActive) {
       return;
     }
     const target = event.currentTarget as HTMLElement;
@@ -634,6 +702,7 @@
       settingsOpen = false;
       fill = { bucketId, itemId };
       mode = "buckets";
+      markPanelOpened();
       return;
     }
     try {
@@ -660,14 +729,99 @@
   }
 
   function onStagePointerDown(event: PointerEvent) {
-    if (!fill) {
+    if (dragging || (!editor && !settingsOpen && !fill)) {
       return;
     }
     const target = event.target as HTMLElement | null;
-    if (target?.closest(".panel") || target?.closest(".orb.action")) {
+    if (target?.closest(".panel") || target?.closest(".orb.main") || target?.closest(".orb.settings")) {
       return;
     }
-    fill = null;
+    if (event.button === 2 && target?.closest(".orb.action")) {
+      return;
+    }
+    dismissPanelsFromOutside();
+  }
+
+  function toClientPoint(physicalX: number, physicalY: number): { x: number; y: number } {
+    const scale = window.devicePixelRatio || 1;
+    return { x: physicalX / scale, y: physicalY / scale };
+  }
+
+  async function acceptDroppedFiles(paths: string[]) {
+    const list = buckets;
+    const nav = navigationBucket(list);
+    const scripts = batchBucket(list);
+    if (!nav || !scripts) {
+      showNotice("还没有可以放入的分组");
+      return;
+    }
+    const seen = usedTargets(list);
+    let added = 0;
+    let skipped = 0;
+    let latest = snapshot;
+    for (const raw of paths) {
+      const target = raw.trim();
+      if (!target) {
+        continue;
+      }
+      const key = normalizePath(target);
+      if (seen.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      seen.add(key);
+      const label = labelFromPath(target);
+      const tool = isBatchPath(target)
+        ? { type: "bat" as const, label, target }
+        : { type: "open-path" as const, label, target };
+      try {
+        latest = await addTool(isBatchPath(target) ? scripts.id : nav.id, tool);
+        added += 1;
+      } catch (cause) {
+        showNotice(messageFrom(cause));
+        return;
+      }
+    }
+    if (latest) {
+      snapshot = latest;
+    }
+    if (added > 0 && skipped > 0) {
+      showNotice(`已添加 ${added} 个，跳过 ${skipped} 个重复`);
+    } else if (added > 0) {
+      showNotice(added === 1 ? "已添加到球体" : `已添加 ${added} 个`);
+    } else if (skipped > 0) {
+      showNotice("这些文件已经在列表里");
+    }
+  }
+
+  function onPreviewDragOver(event: DragEvent) {
+    if (!preview || dragging) {
+      return;
+    }
+    event.preventDefault();
+    fileOver = overMainSphere(event.clientX, event.clientY);
+  }
+
+  function onPreviewDragLeave() {
+    fileOver = false;
+  }
+
+  function onPreviewDrop(event: DragEvent) {
+    if (!preview) {
+      return;
+    }
+    event.preventDefault();
+    const hot = fileOver;
+    fileOver = false;
+    if (!hot) {
+      return;
+    }
+    const files = [...(event.dataTransfer?.files ?? [])];
+    const paths = files.map((file) => {
+      const withPath = file as File & { path?: string };
+      return withPath.path || file.name;
+    });
+    void acceptDroppedFiles(paths);
   }
 
   function findItem(list: Bucket[], bucketId?: string, itemId?: string): ToolItem | undefined {
@@ -678,7 +832,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} onblur={dismissPanelsFromOutside} />
 
 <main
   class="stage"
@@ -692,7 +846,6 @@
   style:top="{preview ? `${origin.y}px` : '0px'}"
   style:--motion="{metrics.animationMs}ms"
   style:--dim="{metrics.unfocusedOpacity}"
-  onpointerdown={onStagePointerDown}
   onpointerenter={cancelCollapse}
   onpointerleave={scheduleCollapse}
   oncontextmenu={(event) => event.preventDefault()}
@@ -726,6 +879,7 @@
       {#if node.kind === "main"}
         <button
           class="sphere main jewel {sphereLook}"
+          class:drop-hot={fileOver && !dragging}
           type="button"
           aria-label="添加工具"
           aria-pressed={editor !== null}
@@ -734,6 +888,9 @@
           onpointermove={onMainPointerMove}
           onpointerup={onMainPointerUp}
           onclick={onMainClick}
+          ondragover={onPreviewDragOver}
+          ondragleave={onPreviewDragLeave}
+          ondrop={onPreviewDrop}
         >
           <MainJewel sphereStyle={sphereLook} glyph={sphereGlyph} />
         </button>

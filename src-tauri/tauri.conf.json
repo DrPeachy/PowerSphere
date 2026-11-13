@@ -35,7 +35,7 @@
         "skipTaskbar": true,
         "shadow": false,
         "center": false,
-        "dragDropEnabled": false,
+        "dragDropEnabled": true,
         "backgroundThrottling": "disabled"
       }
     ],

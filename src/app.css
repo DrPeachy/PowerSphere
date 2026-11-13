@@ -600,6 +600,13 @@ textarea {
   box-shadow: none;
 }
 
+.stage:not(.dragging) .jewel.glass.drop-hot {
+  transform: scale(1.03);
+  box-shadow:
+    0 0 18px rgba(186, 220, 255, 0.55),
+    0 6px 14px rgba(20, 30, 60, 0.16);
+}
+
 .body.pearl {
   overflow: hidden;
   background: radial-gradient(circle at 38% 30%, #fff 0, #f8f3f5 22%, #e9e1ea 52%, #d2c8d9 82%, #bdb3c6 100%);
