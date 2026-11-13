@@ -873,6 +873,118 @@ textarea {
   box-shadow: 0 0 16px 4px var(--glyph);
 }
 
+.stage.pointer-out:not(.dragging) .sphere:not(.main):hover {
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .orb.focused .sphere:hover {
+  transform: scale(1.05);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+    inset 0 0 0 2px rgba(8, 12, 22, 0.28),
+    0 8px 18px rgba(20, 30, 60, 0.2),
+    0 1px 3px rgba(20, 30, 60, 0.16);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:has(.body.glass.webgl):is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    0 8px 18px rgba(20, 30, 60, 0.2),
+    0 1px 3px rgba(20, 30, 60, 0.16);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec {
+  opacity: 1;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .spec-soft,
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .lip-shadow {
+  opacity: 0;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.glass:is(:hover, :focus-visible, [aria-pressed="true"]) .caustic {
+  opacity: 0.85;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    0 8px 18px rgba(60, 40, 80, 0.22),
+    0 2px 4px rgba(60, 40, 80, 0.12),
+    inset 0 -2px 6px rgba(120, 90, 140, 0.18);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) .iri {
+  transform: none;
+  opacity: 0.35;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.pearl:is(:hover, :focus-visible, [aria-pressed="true"]) .spec {
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  box-shadow:
+    inset 0 0 0 0.75px rgba(255, 255, 255, 0.1),
+    inset 0 -2px 3px rgba(255, 255, 255, 0.08),
+    0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) .halo {
+  opacity: 0.5;
+  transform: scale(0.5);
+}
+
+.stage.pointer-out:not(.dragging) .jewel.obsidian:is(:hover, :focus-visible, [aria-pressed="true"]) .core {
+  animation: core-breath 3s ease-in-out infinite;
+  transform: none;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.plus svg {
+  opacity: 0;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.plus .arm,
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.power .arc,
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.power .stem {
+  stroke-dashoffset: 1;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .dots i {
+  transform: translate(-50%, -50%);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal {
+  opacity: 0;
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p1 {
+  transform: rotate(-45deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p2 {
+  transform: rotate(45deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p3 {
+  transform: rotate(135deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .petal.p4 {
+  transform: rotate(225deg) scale(0.2);
+}
+
+.stage.pointer-out:not(.dragging) .jewel:is(:hover, :focus-visible, [aria-pressed="true"]) .sigil.spark i {
+  animation: core-breath 3.2s ease-in-out infinite;
+  transform: none;
+  box-shadow: 0 0 10px var(--glyph);
+}
+
 .stage.dragging .jewel,
 .stage.dragging .jewel .layer,
 .stage.dragging .jewel .sigil,

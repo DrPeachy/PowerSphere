@@ -39,7 +39,7 @@
     type SphereNode,
     type WorkArea,
   } from "./lib/layout";
-  import { setGlassDrag } from "./lib/glassGl";
+  import { setGlassAway, setGlassDrag } from "./lib/glassGl";
   import { normalizeStyle, resolveGlyph } from "./lib/jewel";
   import { mergePlaceholders, parseTemplate } from "./lib/template";
   import type { AppSnapshot, Bucket, ToolItem } from "./lib/types";
@@ -93,6 +93,8 @@
   let holding = $state(false);
   let fileOver = $state(false);
   let fileDragActive = false;
+  let nativeHover = $state<boolean | null>(null);
+  let collapseAfterHold = false;
   let panelOpenedAt = 0;
   let placed: { cx: number; cy: number; w: number; h: number } | null = null;
   let layoutGen = 0;
@@ -167,6 +169,9 @@
         clearTimeout(collapseTimer);
         collapseTimer = undefined;
       }
+      if (nativeHover === false) {
+        collapseAfterHold = true;
+      }
     }
     const preserveClient = shift.x === 0 && shift.y === 0;
     void syncWindow(next, point, preserveClient).finally(() => {
@@ -181,7 +186,12 @@
       }
       if (shouldHold) {
         holding = false;
-        void settleHover();
+        if (collapseAfterHold) {
+          collapseAfterHold = false;
+          scheduleCollapse();
+        } else {
+          void settleHover();
+        }
       }
     });
   });
@@ -318,6 +328,9 @@
           const payload = event.payload;
           noteFileDrag(payload.kind, payload.paths, payload.x, payload.y);
         });
+        const unlistenHover = await listen<{ inside: boolean }>("powersphere://hover", (event) => {
+          onNativeHover(event.payload.inside);
+        });
         const stopFocus = await getCurrentWindow().onFocusChanged((event) => {
           if (!event.payload) {
             dismissPanelsFromOutside();
@@ -328,6 +341,7 @@
           stopMoves();
           stopDrop();
           unlistenFileDrag();
+          unlistenHover();
           stopFocus();
         };
       }
@@ -368,14 +382,22 @@
 
   function cancelCollapse() {
     pointerInside = true;
+    collapseAfterHold = false;
     if (collapseTimer) {
       clearTimeout(collapseTimer);
       collapseTimer = undefined;
     }
   }
 
-  function scheduleCollapse() {
-    if (dragging || holding) {
+  function scheduleCollapse(force = false) {
+    if (!force && nativeHover === true) {
+      return;
+    }
+    if (dragging) {
+      return;
+    }
+    if (holding) {
+      collapseAfterHold = true;
       return;
     }
     pointerInside = false;
@@ -389,6 +411,30 @@
       mode = "idle";
       activeBucketId = null;
     }, 220);
+  }
+
+  function onNativeHover(inside: boolean) {
+    if (nativeHover === inside) {
+      return;
+    }
+    nativeHover = inside;
+    setGlassAway(!inside);
+    if (inside) {
+      cancelCollapse();
+    } else {
+      scheduleCollapse();
+    }
+  }
+
+  function onStageEnter() {
+    if (nativeHover === false) {
+      return;
+    }
+    cancelCollapse();
+  }
+
+  function onStageLeave() {
+    scheduleCollapse();
   }
 
   $effect(() => {
@@ -457,7 +503,8 @@
       cursor.y >= originNow.y - margin &&
       cursor.y <= originNow.y + layout.height + margin;
     if (!inside) {
-      scheduleCollapse();
+      onNativeHover(false);
+      scheduleCollapse(true);
     }
   }
 
@@ -758,7 +805,7 @@
     if (kind === "leave") {
       fileDragActive = false;
       fileOver = false;
-      scheduleCollapse();
+      scheduleCollapse(true);
       return;
     }
     const point = toClientPoint(physicalX, physicalY);
@@ -879,6 +926,7 @@
   class:preview
   class:dragging
   class:holding
+  class:pointer-out={nativeHover === false}
   style:transform={pin.x !== 0 || pin.y !== 0 ? `translate3d(${pin.x}px, ${pin.y}px, 0)` : undefined}
   style:width="{layout.width}px"
   style:height="{layout.height}px"
@@ -886,8 +934,8 @@
   style:top="{preview ? `${origin.y}px` : '0px'}"
   style:--motion="{metrics.animationMs}ms"
   style:--dim="{metrics.unfocusedOpacity}"
-  onpointerenter={cancelCollapse}
-  onpointerleave={scheduleCollapse}
+  onpointerenter={onStageEnter}
+  onpointerleave={onStageLeave}
   oncontextmenu={(event) => event.preventDefault()}
 >
   {#each shown as node (node.key)}

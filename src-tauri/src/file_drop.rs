@@ -5,10 +5,17 @@
 //! no-drop cursor. Mouse clicks still work because they honor the region.
 //! Hit-testing goes through `WM_NCHITTEST` instead, and this window registers
 //! its own `IDropTarget` so a file drag over the sphere is accepted.
+//!
+//! `HTTRANSPARENT` also stops mouse input from reaching the webview while the
+//! cursor is still inside that webview's client rectangle (the pre-sized
+//! window). Windows then withholds `WM_MOUSELEAVE`, so the page never sees
+//! `pointerleave` until the cursor finally exits the whole window. The
+//! subclass reports the inside/outside edge itself.
 
 #![allow(unsafe_code)]
 
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{AppHandle, Emitter};
 use windows::{
@@ -24,15 +31,22 @@ use windows::{
             SystemServices::MODIFIERKEYS_FLAGS,
         },
         UI::{
+            Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
             Shell::{
                 DefSubclassProc, DragAcceptFiles, DragFinish, DragQueryFileW, HDROP,
                 SetWindowSubclass,
             },
-            WindowsAndMessaging::{EnumChildWindows, HTCLIENT, HTTRANSPARENT, WM_NCHITTEST},
+            WindowsAndMessaging::{
+                EnumChildWindows, HTCLIENT, HTTRANSPARENT, PostMessageW, WM_APP, WM_NCHITTEST,
+            },
         },
     },
     core::implement,
 };
+
+/// Posted to ourselves so the webview is notified outside `WM_NCHITTEST`.
+const HOVER_MSG: u32 = WM_APP + 73;
+const WM_MOUSELEAVE: u32 = 0x02A3;
 
 struct HitBox {
     left: i32,
@@ -44,6 +58,9 @@ struct HitBox {
 
 static HIT_BOXES: Mutex<Vec<HitBox>> = Mutex::new(Vec::new());
 static INSTALLED: Mutex<bool> = Mutex::new(false);
+static APP: Mutex<Option<AppHandle>> = Mutex::new(None);
+static HOVER_INSIDE: AtomicBool = AtomicBool::new(false);
+static LEAVE_ARMED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, serde::Serialize)]
 struct FileDragEvent {
@@ -95,6 +112,9 @@ fn contains(rect: &HitBox, x: i32, y: i32) -> bool {
 }
 
 pub fn install(hwnd: HWND, app: AppHandle) {
+    if let Ok(mut guard) = APP.lock() {
+        *guard = Some(app.clone());
+    }
     let mut installed = INSTALLED.lock().unwrap_or_else(|err| err.into_inner());
     if *installed {
         return;
@@ -113,8 +133,8 @@ pub fn install(hwnd: HWND, app: AppHandle) {
         let pointer: *mut std::ffi::c_void = std::mem::transmute(&mut trait_obj);
         unsafe extern "system" fn each(child: HWND, param: LPARAM) -> windows::core::BOOL {
             unsafe {
-                let closure = &mut *(param.0 as *mut std::ffi::c_void
-                    as *mut &mut dyn FnMut(HWND) -> bool);
+                let closure =
+                    &mut *(param.0 as *mut std::ffi::c_void as *mut &mut dyn FnMut(HWND) -> bool);
                 closure(child).into()
             }
         }
@@ -122,6 +142,53 @@ pub fn install(hwnd: HWND, app: AppHandle) {
         let _ = DragAcceptFiles(hwnd, true);
         *installed = true;
     }
+}
+
+fn sync_hover(hwnd: HWND, inside: bool) {
+    let was = HOVER_INSIDE.swap(inside, Ordering::Relaxed);
+    if inside {
+        arm_leave(hwnd);
+    }
+    if was == inside {
+        return;
+    }
+    unsafe {
+        let _ = PostMessageW(
+            Some(hwnd),
+            HOVER_MSG,
+            WPARAM(if inside { 1 } else { 0 }),
+            LPARAM(0),
+        );
+    }
+}
+
+fn arm_leave(hwnd: HWND) {
+    if LEAVE_ARMED.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut event = TRACKMOUSEEVENT {
+        cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+        dwFlags: TME_LEAVE,
+        hwndTrack: hwnd,
+        dwHoverTime: 0,
+    };
+    let armed = unsafe { TrackMouseEvent(&mut event).is_ok() };
+    if armed {
+        LEAVE_ARMED.store(true, Ordering::Relaxed);
+    }
+}
+
+fn emit_hover(inside: bool) {
+    let app = APP.lock().ok().and_then(|guard| guard.clone());
+    let Some(app) = app else {
+        return;
+    };
+    let _ = app.emit("powersphere://hover", HoverEvent { inside });
+}
+
+#[derive(Clone, serde::Serialize)]
+struct HoverEvent {
+    inside: bool,
 }
 
 fn register_drop_target(hwnd: HWND, app: &AppHandle) {
@@ -144,6 +211,17 @@ unsafe extern "system" fn hit_test_proc(
     _data: usize,
 ) -> LRESULT {
     unsafe {
+        if msg == HOVER_MSG {
+            emit_hover(wparam.0 != 0);
+            return LRESULT(0);
+        }
+        if msg == WM_MOUSELEAVE {
+            // Tracking is one-shot. The cursor left the window rectangle
+            // without another hit-test, for example off the screen edge.
+            LEAVE_ARMED.store(false, Ordering::Relaxed);
+            sync_hover(hwnd, false);
+            return DefSubclassProc(hwnd, msg, wparam, lparam);
+        }
         if msg == WM_NCHITTEST {
             let packed = lparam.0 as u32;
             let mut point = POINT {
@@ -151,7 +229,9 @@ unsafe extern "system" fn hit_test_proc(
                 y: (packed >> 16) as i16 as i32,
             };
             let _ = ScreenToClient(hwnd, &mut point);
-            if point_hits(point.x, point.y) {
+            let inside = point_hits(point.x, point.y);
+            sync_hover(hwnd, inside);
+            if inside {
                 return LRESULT(HTCLIENT as _);
             }
             return LRESULT(HTTRANSPARENT as _);

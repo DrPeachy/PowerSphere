@@ -78,9 +78,18 @@ void main() {
 export const glassDrag = { active: false };
 
 const dragListeners = new Set<() => void>();
+let glassAway = false;
 
 export function setGlassDrag(active: boolean) {
   glassDrag.active = active;
+  for (const listener of dragListeners) listener();
+}
+
+export function setGlassAway(away: boolean) {
+  if (glassAway === away) {
+    return;
+  }
+  glassAway = away;
   for (const listener of dragListeners) listener();
 }
 
@@ -168,6 +177,7 @@ export function mountLiquidGlass(canvas: HTMLCanvasElement): () => void {
     last = now;
     const hover =
       !glassDrag.active &&
+      !glassAway &&
       (host.matches(":hover") || host.matches(":focus-visible") || host.getAttribute("aria-pressed") === "true");
     const target = glassDrag.active ? IDLE_CURVE : hover ? PRESSED_CURVE : IDLE_CURVE;
     if (glassDrag.active || reduce) curve = target;
