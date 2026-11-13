@@ -364,25 +364,18 @@ export function computeLayout(
 }
 
 export function hitRects(layout: Layout, mode: ClusterMode, panelOpen: boolean): HitRect[] {
-  const pad = 16;
   const rects: HitRect[] = [];
-  const main = layout.nodes.find((node) => node.kind === "main");
-  if (main) {
-    rects.push(ellipse(main.left, main.top, main.size, 28));
-  }
-  if (mode !== "idle") {
-    const kids = layout.nodes.filter((node) => node.kind === "bucket" || node.kind === "settings");
-    const box = unionRect(kids, pad);
-    if (box) {
-      rects.push({ ...box, round: false });
+  for (const node of layout.nodes) {
+    const visible =
+      node.kind === "main" ||
+      (node.kind === "action" ? mode === "actions" : mode !== "idle");
+    if (!visible) {
+      continue;
     }
-  }
-  if (mode === "actions") {
-    const actions = layout.nodes.filter((node) => node.kind === "action");
-    const box = unionRect(actions, pad);
-    if (box) {
-      rects.push({ ...box, round: false });
-    }
+    // The main circle keeps the glow margin. Child hits are their own circles,
+    // not one rectangle covering the column above the sphere.
+    const pad = node.kind === "main" ? 28 : 8;
+    rects.push(ellipse(node.left, node.top, node.size, pad));
   }
   if (panelOpen && layout.panel) {
     rects.push({
@@ -503,26 +496,6 @@ function vector(dir: Dir): Point {
 
 function ellipse(left: number, top: number, size: number, pad: number): HitRect {
   return { x: left - pad, y: top - pad, w: size + pad * 2, h: size + pad * 2, round: true };
-}
-
-function unionRect(
-  nodes: Array<{ left: number; top: number; size: number }>,
-  pad: number,
-): { x: number; y: number; w: number; h: number } | null {
-  if (nodes.length === 0) {
-    return null;
-  }
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const node of nodes) {
-    minX = Math.min(minX, node.left - pad);
-    minY = Math.min(minY, node.top - pad - 18);
-    maxX = Math.max(maxX, node.left + node.size + pad);
-    maxY = Math.max(maxY, node.top + node.size + pad + 18);
-  }
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
 function clamp(value: number, min: number, max: number): number {

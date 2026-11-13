@@ -1,16 +1,10 @@
-//! Windows file drop for a click-through sphere window.
+//! Windows file drop and click-through for the sphere window.
 //!
-//! `SetWindowRgn` clips OLE hit-testing. Explorer then finds either no drop
-//! target or a child whose drop target never receives the drag, and shows the
-//! no-drop cursor. Mouse clicks still work because they honor the region.
-//! Hit-testing goes through `WM_NCHITTEST` instead, and this window registers
-//! its own `IDropTarget` so a file drag over the sphere is accepted.
-//!
-//! `HTTRANSPARENT` also stops mouse input from reaching the webview while the
-//! cursor is still inside that webview's client rectangle (the pre-sized
-//! window). Windows then withholds `WM_MOUSELEAVE`, so the page never sees
-//! `pointerleave` until the cursor finally exits the whole window. The
-//! subclass reports the inside/outside edge itself.
+//! `HTTRANSPARENT` only continues the hit test inside this thread, so the
+//! pre-sized window still takes clicks meant for other programs. The window
+//! region is the shape other programs can click through. It is rebuilt from
+//! the current circles on every collapse and expand. File drags over the main
+//! sphere still hit this window's `IDropTarget`.
 
 #![allow(unsafe_code)]
 
@@ -21,7 +15,10 @@ use tauri::{AppHandle, Emitter};
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, POINT, POINTL, WPARAM},
-        Graphics::Gdi::ScreenToClient,
+        Graphics::Gdi::{
+            CombineRgn, CreateEllipticRgn, CreateRectRgn, DeleteObject, RGN_OR, ScreenToClient,
+            SetWindowRgn,
+        },
         System::{
             Com::{DVASPECT_CONTENT, FORMATETC, IDataObject, TYMED_HGLOBAL},
             Ole::{
@@ -48,6 +45,7 @@ use windows::{
 const HOVER_MSG: u32 = WM_APP + 73;
 const WM_MOUSELEAVE: u32 = 0x02A3;
 
+#[derive(Clone)]
 struct HitBox {
     left: i32,
     top: i32,
@@ -56,7 +54,15 @@ struct HitBox {
     round: bool,
 }
 
-static HIT_BOXES: Mutex<Vec<HitBox>> = Mutex::new(Vec::new());
+struct HitState {
+    generation: u64,
+    boxes: Vec<HitBox>,
+}
+
+static HIT_BOXES: Mutex<HitState> = Mutex::new(HitState {
+    generation: 0,
+    boxes: Vec::new(),
+});
 static INSTALLED: Mutex<bool> = Mutex::new(false);
 static APP: Mutex<Option<AppHandle>> = Mutex::new(None);
 static HOVER_INSIDE: AtomicBool = AtomicBool::new(false);
@@ -70,7 +76,7 @@ struct FileDragEvent {
     y: f64,
 }
 
-pub fn update_hit_boxes(rects: &[(f64, f64, f64, f64, bool)], scale: f64) {
+pub fn update_hit_boxes(rects: &[(f64, f64, f64, f64, bool)], scale: f64, generation: u64) -> bool {
     let mut boxes = Vec::new();
     for (x, y, w, h, round) in rects {
         if !(w.is_finite() && h.is_finite() && *w > 0.0 && *h > 0.0) {
@@ -84,16 +90,59 @@ pub fn update_hit_boxes(rects: &[(f64, f64, f64, f64, bool)], scale: f64) {
             round: *round,
         });
     }
-    if let Ok(mut guard) = HIT_BOXES.lock() {
-        *guard = boxes;
+    let mut guard = HIT_BOXES.lock().unwrap_or_else(|err| err.into_inner());
+    if generation < guard.generation {
+        return false;
     }
+    guard.generation = generation;
+    guard.boxes = boxes;
+    true
 }
 
 pub fn point_hits(x: i32, y: i32) -> bool {
-    let Ok(boxes) = HIT_BOXES.lock() else {
+    let Ok(guard) = HIT_BOXES.lock() else {
         return false;
     };
-    boxes.iter().any(|rect| contains(rect, x, y))
+    guard.boxes.iter().any(|rect| contains(rect, x, y))
+}
+
+pub fn apply_shape(hwnd: HWND) {
+    let boxes = HIT_BOXES
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .boxes
+        .clone();
+    unsafe {
+        let mut region = None;
+        for rect in &boxes {
+            let part = if rect.round {
+                CreateEllipticRgn(rect.left, rect.top, rect.right, rect.bottom)
+            } else {
+                CreateRectRgn(rect.left, rect.top, rect.right, rect.bottom)
+            };
+            if part.is_invalid() {
+                continue;
+            }
+            region = Some(match region {
+                None => part,
+                Some(previous) => {
+                    let _ = CombineRgn(Some(previous), Some(previous), Some(part), RGN_OR);
+                    let _ = DeleteObject(part.into());
+                    previous
+                }
+            });
+        }
+        let Some(region) = region else {
+            let empty = CreateRectRgn(0, 0, 0, 0);
+            if !empty.is_invalid() && SetWindowRgn(hwnd, Some(empty), false) == 0 {
+                let _ = DeleteObject(empty.into());
+            }
+            return;
+        };
+        if SetWindowRgn(hwnd, Some(region), false) == 0 {
+            let _ = DeleteObject(region.into());
+        }
+    }
 }
 
 fn contains(rect: &HitBox, x: i32, y: i32) -> bool {
@@ -120,9 +169,6 @@ pub fn install(hwnd: HWND, app: AppHandle) {
         return;
     }
     unsafe {
-        // Drop any region installed earlier in this process. A region keeps
-        // Explorer from offering the window as an OLE drop target.
-        let _ = windows::Win32::Graphics::Gdi::SetWindowRgn(hwnd, None, true);
         let _ = SetWindowSubclass(hwnd, Some(hit_test_proc), 1, 0);
         register_drop_target(hwnd, &app);
         let mut callback = |child| {
@@ -139,7 +185,7 @@ pub fn install(hwnd: HWND, app: AppHandle) {
             }
         }
         let _ = EnumChildWindows(Some(hwnd), Some(each), LPARAM(pointer as _));
-        let _ = DragAcceptFiles(hwnd, true);
+        DragAcceptFiles(hwnd, true);
         *installed = true;
     }
 }

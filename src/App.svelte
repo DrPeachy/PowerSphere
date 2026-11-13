@@ -197,6 +197,7 @@
   });
 
   let hitKey = "";
+  let hitGen = 0;
   $effect(() => {
     if (!ready || preview) {
       return;
@@ -207,7 +208,8 @@
       return;
     }
     hitKey = key;
-    void setHitRects(rects);
+    const generation = ++hitGen;
+    void setHitRects(rects, generation);
   });
 
   let snapKey = "";

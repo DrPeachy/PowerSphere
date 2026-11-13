@@ -225,11 +225,12 @@ export async function cursorPosition(): Promise<{ x: number; y: number }> {
 
 export async function setHitRects(
   rects: { x: number; y: number; w: number; h: number; round: boolean }[],
+  generation: number,
 ): Promise<void> {
   if (!inTauri()) {
     return;
   }
-  await invoke("set_hit_rects", { rects });
+  await invoke("set_hit_rects", { rects, generation });
 }
 
 export async function setAnchor(anchor: { x: number; y: number }): Promise<void> {

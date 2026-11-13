@@ -174,24 +174,36 @@ pub struct HitRect {
 }
 
 #[tauri::command]
-pub fn set_hit_rects(window: tauri::WebviewWindow, rects: Vec<HitRect>) -> Result<(), String> {
-    apply_hit_rects(&window, &rects)
+pub fn set_hit_rects(
+    window: tauri::WebviewWindow,
+    rects: Vec<HitRect>,
+    generation: u64,
+) -> Result<(), String> {
+    apply_hit_rects(&window, &rects, generation)
 }
 
-fn apply_hit_rects(window: &tauri::WebviewWindow, rects: &[HitRect]) -> Result<(), String> {
+fn apply_hit_rects(
+    window: &tauri::WebviewWindow,
+    rects: &[HitRect],
+    generation: u64,
+) -> Result<(), String> {
     #[cfg(windows)]
     {
-        apply_hit_rects_windows(window, rects)
+        apply_hit_rects_windows(window, rects, generation)
     }
     #[cfg(not(windows))]
     {
-        let _ = (window, rects);
+        let _ = (window, rects, generation);
         Ok(())
     }
 }
 
 #[cfg(windows)]
-fn apply_hit_rects_windows(window: &tauri::WebviewWindow, rects: &[HitRect]) -> Result<(), String> {
+fn apply_hit_rects_windows(
+    window: &tauri::WebviewWindow,
+    rects: &[HitRect],
+    generation: u64,
+) -> Result<(), String> {
     let hwnd = window.hwnd().map_err(|err| err.to_string())?;
     let scale = window.scale_factor().map_err(|err| err.to_string())?;
     if !(scale.is_finite() && scale > 0.0) {
@@ -201,8 +213,11 @@ fn apply_hit_rects_windows(window: &tauri::WebviewWindow, rects: &[HitRect]) -> 
         .iter()
         .map(|rect| (rect.x, rect.y, rect.w, rect.h, rect.round))
         .collect();
-    crate::file_drop::update_hit_boxes(&logical, scale);
+    if !crate::file_drop::update_hit_boxes(&logical, scale, generation) {
+        return Ok(());
+    }
     crate::file_drop::install(hwnd, window.app_handle().clone());
+    crate::file_drop::apply_shape(hwnd);
     Ok(())
 }
 
