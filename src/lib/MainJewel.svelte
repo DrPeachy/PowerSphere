@@ -13,12 +13,12 @@
 </script>
 
 <div class="body glass" class:on={sphereStyle === "glass" || !sphereStyle}>
-  <i class="layer shade convex"></i>
-  <i class="layer shade concave"></i>
-  <i class="layer lip convex"></i>
-  <i class="layer lip concave"></i>
-  <i class="layer glint convex"></i>
-  <i class="layer glint concave"></i>
+  <i class="layer caus"></i>
+  <i class="layer rim"></i>
+  <i class="layer spec"></i>
+  <i class="layer spec-soft"></i>
+  <i class="layer caustic"></i>
+  <i class="layer lip-shadow"></i>
 </div>
 <div class="body pearl" class:on={sphereStyle === "pearl"}>
   <i class="layer iri"></i>
