@@ -14,6 +14,7 @@
     runItem,
     setAnchor,
     setHitRects,
+    setPointerHold,
   } from "./lib/api";
   import {
     batchBucket,
@@ -27,7 +28,7 @@
   import {
     choosePlacement,
     computeLayout,
-    hitRects,
+    hitShapes,
     mark,
     metricsFrom,
     pinShift,
@@ -198,18 +199,28 @@
 
   let hitKey = "";
   let hitGen = 0;
-  $effect(() => {
-    if (!ready || preview) {
-      return;
-    }
-    const rects = hitRects(layout, mode, panelSize !== null);
-    const key = JSON.stringify(rects);
+  function publishHits(shapes: ReturnType<typeof hitShapes>, key: string) {
     if (key === hitKey) {
       return;
     }
     hitKey = key;
-    const generation = ++hitGen;
-    void setHitRects(rects, generation);
+    void setHitRects(shapes, ++hitGen);
+  }
+  function flushHits() {
+    if (!ready || preview) {
+      return;
+    }
+    const shapes = hitShapes(layout, mode, panelSize !== null, metrics.label);
+    publishHits(shapes, JSON.stringify(shapes));
+  }
+  $effect(() => {
+    if (!ready || preview) {
+      return;
+    }
+    const shapes = hitShapes(layout, mode, panelSize !== null, metrics.label);
+    const key = JSON.stringify(shapes);
+    const timer = setTimeout(() => publishHits(shapes, key), 32);
+    return () => clearTimeout(timer);
   });
 
   let snapKey = "";
@@ -662,6 +673,9 @@
     } catch {
       // Pointer capture is unavailable for some synthetic events.
     }
+    if (!preview) {
+      void setPointerHold(true);
+    }
   }
 
   function onMainPointerMove(event: PointerEvent) {
@@ -703,6 +717,9 @@
   function onMainPointerUp(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.pointerId) {
       return;
+    }
+    if (!preview) {
+      void setPointerHold(false);
     }
     const moved = drag.moved;
     drag = null;
@@ -953,10 +970,12 @@
       class:dim
       class:focused
       ontransitionend={(event) => {
-        if (event.propertyName !== "opacity" || node.kind !== "action" || node.open) {
-          return;
+        if (event.propertyName === "opacity" || event.propertyName === "transform") {
+          flushHits();
         }
-        retireAction(node.key);
+        if (event.propertyName === "opacity" && node.kind === "action" && !node.open) {
+          retireAction(node.key);
+        }
       }}
       style:left="{node.left}px"
       style:top="{node.top}px"
@@ -977,6 +996,7 @@
           onpointerdown={onMainPointerDown}
           onpointermove={onMainPointerMove}
           onpointerup={onMainPointerUp}
+          onpointercancel={onMainPointerUp}
           onclick={onMainClick}
         >
           <MainJewel sphereStyle={sphereLook} glyph={sphereGlyph} />

@@ -3,9 +3,9 @@
 mod autostart;
 mod commands;
 mod config;
-#[cfg(windows)]
-mod file_drop;
 mod host;
+#[cfg(windows)]
+mod interact;
 mod paths;
 mod plugins;
 mod runner;
@@ -47,6 +47,7 @@ pub fn run() {
             commands::set_shell_bounds,
             commands::cursor_position,
             commands::set_hit_rects,
+            commands::set_pointer_hold,
             commands::run_item,
         ])
         .run(tauri::generate_context!())
@@ -100,6 +101,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn Error>> {
                 let _ = hidden.hide();
             }
         });
+        #[cfg(windows)]
+        interact::start(app.handle());
     }
 
     Ok(())

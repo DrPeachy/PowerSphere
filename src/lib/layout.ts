@@ -195,7 +195,15 @@ export interface HitRect {
   w: number;
   h: number;
   round: boolean;
+  /** Main sphere. Drops are accepted only on this circle. */
+  main: boolean;
 }
+
+/** Matches `.caption` in app.css. */
+const CAPTION_WIDTH = 76;
+const CAPTION_GAP = 2;
+const MAIN_HIT_MARGIN = 8;
+const CHILD_HIT_MARGIN = 4;
 
 export function computeLayout(
   buckets: Bucket[],
@@ -363,19 +371,25 @@ export function computeLayout(
   };
 }
 
-export function hitRects(layout: Layout, mode: ClusterMode, panelOpen: boolean): HitRect[] {
+/** Circles and labels that should receive the pointer. Empty space is not included. */
+export function hitShapes(
+  layout: Layout,
+  mode: ClusterMode,
+  panelOpen: boolean,
+  labelHeight: number,
+): HitRect[] {
   const rects: HitRect[] = [];
   for (const node of layout.nodes) {
     const visible =
-      node.kind === "main" ||
-      (node.kind === "action" ? mode === "actions" : mode !== "idle");
+      node.kind === "main" || (node.kind === "action" ? mode === "actions" : mode !== "idle");
     if (!visible) {
       continue;
     }
-    // The main circle keeps the glow margin. Child hits are their own circles,
-    // not one rectangle covering the column above the sphere.
-    const pad = node.kind === "main" ? 28 : 8;
-    rects.push(ellipse(node.left, node.top, node.size, pad));
+    const main = node.kind === "main";
+    rects.push(ellipse(node.left, node.top, node.size, main ? MAIN_HIT_MARGIN : CHILD_HIT_MARGIN, main));
+    if (!main && node.label) {
+      rects.push(captionRect(node.left, node.top, node.size, labelHeight, layout.labelAbove));
+    }
   }
   if (panelOpen && layout.panel) {
     rects.push({
@@ -384,6 +398,7 @@ export function hitRects(layout: Layout, mode: ClusterMode, panelOpen: boolean):
       w: layout.panel.w,
       h: layout.panel.h,
       round: false,
+      main: false,
     });
   }
   return rects;
@@ -494,8 +509,33 @@ function vector(dir: Dir): Point {
   }
 }
 
-function ellipse(left: number, top: number, size: number, pad: number): HitRect {
-  return { x: left - pad, y: top - pad, w: size + pad * 2, h: size + pad * 2, round: true };
+function ellipse(left: number, top: number, size: number, pad: number, main: boolean): HitRect {
+  return {
+    x: left - pad,
+    y: top - pad,
+    w: size + pad * 2,
+    h: size + pad * 2,
+    round: true,
+    main,
+  };
+}
+
+function captionRect(
+  left: number,
+  top: number,
+  size: number,
+  labelHeight: number,
+  above: boolean,
+): HitRect {
+  const height = labelHeight + CAPTION_GAP;
+  return {
+    x: left + size / 2 - CAPTION_WIDTH / 2,
+    y: above ? top - height : top + size,
+    w: CAPTION_WIDTH,
+    h: height,
+    round: false,
+    main: false,
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
