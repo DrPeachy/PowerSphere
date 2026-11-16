@@ -13,7 +13,9 @@
     runFilled,
     runItem,
     setAnchor,
+    animateShellPosition,
     setHitRects,
+    setInputSuspended,
     setPointerHold,
   } from "./lib/api";
   import {
@@ -63,6 +65,8 @@
   let ready = $state(false);
   let pointerInside = false;
   let dragging = $state(false);
+  let snapping = $state(false);
+  const snapGlideMs = 180;
   let anchor = $state({ x: 180, y: 220 });
   let work = $state<WorkArea>({ left: 0, top: 0, right: 1280, bottom: 800 });
   let lockedPlacement = $state<Placement | null>(null);
@@ -149,7 +153,7 @@
   });
 
   $effect(() => {
-    if (!ready || preview) {
+    if (!ready || preview || snapping) {
       return;
     }
     const next = layout;
@@ -207,14 +211,14 @@
     void setHitRects(shapes, ++hitGen);
   }
   function flushHits() {
-    if (!ready || preview) {
+    if (!ready || preview || snapping) {
       return;
     }
     const shapes = hitShapes(layout, mode, panelSize !== null, metrics.label);
     publishHits(shapes, JSON.stringify(shapes));
   }
   $effect(() => {
-    if (!ready || preview) {
+    if (!ready || preview || snapping) {
       return;
     }
     const shapes = hitShapes(layout, mode, panelSize !== null, metrics.label);
@@ -226,7 +230,7 @@
   let snapKey = "";
   $effect(() => {
     const key = `${metrics.snapInset}:${metrics.main}:${work.left}:${work.top}:${work.right}:${work.bottom}`;
-    if (!ready || dragging) {
+    if (!ready || dragging || snapping) {
       return;
     }
     if (snapKey === key) {
@@ -474,7 +478,7 @@
   }
 
   function showBuckets() {
-    if (dragging) {
+    if (dragging || snapping) {
       return;
     }
     cancelCollapse();
@@ -486,7 +490,7 @@
   }
 
   function showActions(bucketId: string) {
-    if (dragging) {
+    if (dragging || snapping) {
       return;
     }
     cancelCollapse();
@@ -592,7 +596,7 @@
   }
 
   function togglePanel() {
-    if (dragging) {
+    if (dragging || snapping) {
       return;
     }
     if (editor) {
@@ -608,7 +612,7 @@
   }
 
   function openSettings() {
-    if (dragging) {
+    if (dragging || snapping) {
       return;
     }
     editor = null;
@@ -619,7 +623,7 @@
   }
 
   function openEditor(bucketId: string, itemId: string) {
-    if (dragging) {
+    if (dragging || snapping) {
       return;
     }
     fill = null;
@@ -630,7 +634,7 @@
   }
 
   function onMainPointerDown(event: PointerEvent) {
-    if (event.button !== 0 || fileDragActive) {
+    if (snapping || event.button !== 0 || fileDragActive) {
       return;
     }
     const target = event.currentTarget as HTMLElement;
@@ -724,40 +728,80 @@
     const moved = drag.moved;
     drag = null;
     dragging = false;
-    lockedPlacement = null;
     setGlassDrag(false);
     if (moved) {
       suppressClick = true;
+      snapping = true;
       void finishDrag();
+      return;
     }
+    lockedPlacement = null;
+  }
+
+  function easeOut(t: number): number {
+    return 1 - (1 - t) ** 3;
+  }
+
+  function glidePreview(from: { x: number; y: number }, to: { x: number; y: number }): Promise<void> {
+    return new Promise((resolve) => {
+      const start = performance.now();
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / snapGlideMs);
+        const eased = easeOut(t);
+        anchor.x = from.x + (to.x - from.x) * eased;
+        anchor.y = from.y + (to.y - from.y) * eased;
+        if (t < 1) {
+          requestAnimationFrame(step);
+          return;
+        }
+        resolve();
+      };
+      requestAnimationFrame(step);
+    });
   }
 
   async function finishDrag() {
+    const release = { x: anchor.x, y: anchor.y };
     try {
       if (!preview) {
+        await setInputSuspended(true);
         const area = await readWorkArea();
         if (area) {
           work = area;
         }
       }
-      const snapped = snapAnchor(anchor, work, metrics.snapInset, metrics.main / 2);
+      const snapped = snapAnchor(release, work, metrics.snapInset, metrics.main / 2);
+      const distance = Math.hypot(snapped.x - release.x, snapped.y - release.y);
+      if (distance >= 1 && preview) {
+        await glidePreview(release, snapped);
+      } else if (distance >= 1) {
+        await syncWindow(layout, release, true);
+        const target = windowOrigin(layout, snapped);
+        await animateShellPosition(target.x, target.y, snapGlideMs);
+      }
       anchor.x = snapped.x;
       anchor.y = snapped.y;
       lockedPlacement = null;
-      await setAnchor({ x: anchor.x, y: anchor.y }).catch(() => {});
+      await setAnchor({ x: snapped.x, y: snapped.y }).catch(() => {});
       if (!preview) {
         const preserveClient = !placed || (placed.cx === layout.mainCx && placed.cy === layout.mainCy);
-        await syncWindow(layout, anchor, preserveClient);
+        await syncWindow(layout, { x: snapped.x, y: snapped.y }, preserveClient);
       }
     } finally {
+      if (lockedPlacement) {
+        lockedPlacement = null;
+      }
+      snapping = false;
+      flushHits();
       if (!preview) {
         setDragLock(false);
+        await setInputSuspended(false);
       }
     }
   }
 
   function onMainClick() {
-    if (suppressClick) {
+    if (snapping || suppressClick) {
       suppressClick = false;
       return;
     }
@@ -769,6 +813,9 @@
   }
 
   async function activate(bucketId: string, itemId: string) {
+    if (dragging || snapping) {
+      return;
+    }
     const item = findOwned(bucketId, itemId);
     if (item?.type === "command" && parseTemplate(item.command ?? "").length > 0) {
       editor = null;
@@ -821,6 +868,13 @@
   }
 
   function noteFileDrag(kind: string, paths: string[] = [], physicalX = 0, physicalY = 0) {
+    if (snapping) {
+      if (kind === "leave" || kind === "drop") {
+        fileDragActive = false;
+        fileOver = false;
+      }
+      return;
+    }
     if (kind === "leave") {
       fileDragActive = false;
       fileOver = false;
@@ -844,7 +898,7 @@
   }
 
   function onFileDragOver(event: DragEvent) {
-    if (dragging) {
+    if (dragging || snapping) {
       return;
     }
     const hot = overMainSphere(event.clientX, event.clientY);
@@ -863,6 +917,9 @@
   }
 
   function onFileDrop(event: DragEvent) {
+    if (snapping) {
+      return;
+    }
     const hot = overMainSphere(event.clientX, event.clientY);
     if (!hot) {
       fileOver = false;

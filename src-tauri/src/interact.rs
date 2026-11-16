@@ -13,7 +13,9 @@
 //! begins on a shape keeps capture until the button is released, which is what
 //! makes dragging the main sphere work. File drags are not that press: the
 //! button is already down, so capture follows the shapes only, and the drop
-//! target reports copy while the cursor is on the main circle.
+//! target reports copy while the cursor is on the main circle. While the
+//! sphere glides to an edge, input is suspended and the window stays in
+//! passthrough.
 
 #![allow(unsafe_code)]
 
@@ -70,6 +72,7 @@ static HIT: Mutex<HitState> = Mutex::new(HitState {
     boxes: Vec::new(),
 });
 static STARTED: AtomicBool = AtomicBool::new(false);
+static SUSPENDED: AtomicBool = AtomicBool::new(false);
 
 fn lock() -> MutexGuard<'static, HitState> {
     HIT.lock().unwrap_or_else(|err| err.into_inner())
@@ -135,6 +138,23 @@ pub fn set_hold(hold: bool) {
     lock().hold = hold;
 }
 
+pub fn set_suspended(app: &AppHandle, suspended: bool) {
+    SUSPENDED.store(suspended, Ordering::SeqCst);
+    if !suspended {
+        return;
+    }
+    let app = app.clone();
+    let app_for_ui = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if !SUSPENDED.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Some(window) = app_for_ui.get_webview_window("main") {
+            let _ = window.set_ignore_cursor_events(true);
+        }
+    });
+}
+
 fn poll_cursor(hwnd_bits: isize, app: AppHandle) {
     let hwnd = HWND(hwnd_bits as *mut std::ffi::c_void);
     let mut captured = false;
@@ -177,7 +197,9 @@ fn poll_cursor(hwnd_bits: isize, app: AppHandle) {
             button_up_ticks = 0;
         }
 
-        let want = sample.hit || hold || press_ours;
+        // A snap glide owns the window until it settles. Keep clicks passing
+        // through instead of treating the moving sphere as a hit target.
+        let want = !SUSPENDED.load(Ordering::Relaxed) && (sample.hit || hold || press_ours);
         if want == captured {
             continue;
         }

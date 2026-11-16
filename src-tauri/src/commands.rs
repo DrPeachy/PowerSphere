@@ -237,6 +237,149 @@ pub fn set_pointer_hold(hold: bool) {
     let _ = hold;
 }
 
+#[tauri::command]
+pub fn set_input_suspended(window: tauri::WebviewWindow, suspended: bool) {
+    #[cfg(windows)]
+    crate::interact::set_suspended(window.app_handle(), suspended);
+    #[cfg(not(windows))]
+    let _ = (window, suspended);
+}
+
+/// Slide the window to a logical origin without resizing it.
+///
+/// The move is eased on a short timer so a snap does not jump. Callers keep
+/// input suspended for the duration and persist only the position at the end.
+#[tauri::command]
+pub fn animate_shell_position(
+    window: tauri::WebviewWindow,
+    x: f64,
+    y: f64,
+    duration_ms: u32,
+) -> Result<(), String> {
+    if !(x.is_finite() && y.is_finite()) {
+        return Err("坐标无效".into());
+    }
+    let duration_ms = duration_ms.clamp(1, 400);
+    #[cfg(windows)]
+    {
+        animate_position_windows(&window, x, y, duration_ms)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = duration_ms;
+        window
+            .set_position(tauri::LogicalPosition::new(x, y))
+            .map_err(|err| err.to_string())
+    }
+}
+
+#[cfg(any(windows, test))]
+fn ease_out_cubic(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    1.0 - (1.0 - t).powi(3)
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn animate_position_windows(
+    window: &tauri::WebviewWindow,
+    x: f64,
+    y: f64,
+    duration_ms: u32,
+) -> Result<(), String> {
+    use std::sync::{Mutex, MutexGuard};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use tauri::{LogicalPosition, PhysicalPosition};
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowRect, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+    };
+
+    static SLIDE: Mutex<()> = Mutex::new(());
+
+    fn slide_lock() -> MutexGuard<'static, ()> {
+        SLIDE.lock().unwrap_or_else(|err| err.into_inner())
+    }
+
+    let _slide = slide_lock();
+    let hwnd = window.hwnd().map_err(|err| err.to_string())?;
+    let scale = window.scale_factor().map_err(|err| err.to_string())?;
+    if !(scale.is_finite() && scale > 0.0) {
+        return Err("缩放无效".into());
+    }
+    let target: PhysicalPosition<i32> = LogicalPosition::new(x, y).to_physical(scale);
+    let mut rect = RECT::default();
+    unsafe {
+        GetWindowRect(hwnd, &mut rect).map_err(|err| err.to_string())?;
+    }
+    let from_x = rect.left;
+    let from_y = rect.top;
+    let to_x = target.x;
+    let to_y = target.y;
+    if from_x == to_x && from_y == to_y {
+        return Ok(());
+    }
+
+    let hwnd_bits = hwnd.0 as isize;
+    let duration = Duration::from_millis(u64::from(duration_ms));
+    let frame = Duration::from_millis(16);
+    let start = Instant::now();
+    let mut placed = (from_x, from_y);
+    loop {
+        let elapsed = start.elapsed();
+        let t = if elapsed >= duration {
+            1.0
+        } else {
+            elapsed.as_secs_f64() / duration.as_secs_f64()
+        };
+        let eased = ease_out_cubic(t);
+        let px = (f64::from(from_x) + (f64::from(to_x) - f64::from(from_x)) * eased).round() as i32;
+        let py = (f64::from(from_y) + (f64::from(to_y) - f64::from(from_y)) * eased).round() as i32;
+        if (px, py) != placed {
+            let hwnd = HWND(hwnd_bits as *mut std::ffi::c_void);
+            unsafe {
+                SetWindowPos(
+                    hwnd,
+                    None,
+                    px,
+                    py,
+                    0,
+                    0,
+                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                )
+                .map_err(|err| err.to_string())?;
+            }
+            placed = (px, py);
+        }
+        if t >= 1.0 {
+            break;
+        }
+        let steps = u64::try_from(elapsed.as_millis() / 16).unwrap_or(0) + 1;
+        let next = Duration::from_millis(steps.saturating_mul(16)).min(duration);
+        let elapsed = start.elapsed();
+        if next > elapsed {
+            thread::sleep(next - elapsed);
+        } else {
+            thread::sleep(frame);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod snap_ease_tests {
+    use super::ease_out_cubic;
+
+    #[test]
+    fn ease_out_cubic_starts_fast_and_finishes_at_one() {
+        assert!((ease_out_cubic(0.0) - 0.0).abs() < 1e-9);
+        assert!((ease_out_cubic(1.0) - 1.0).abs() < 1e-9);
+        assert!(ease_out_cubic(0.4) > 0.4);
+    }
+}
+
 fn apply_shell_bounds(
     window: &tauri::WebviewWindow,
     x: f64,

@@ -240,6 +240,24 @@ export async function setPointerHold(hold: boolean): Promise<void> {
   await invoke("set_pointer_hold", { hold });
 }
 
+export async function setInputSuspended(suspended: boolean): Promise<void> {
+  if (!inTauri()) {
+    return;
+  }
+  await invoke("set_input_suspended", { suspended });
+}
+
+export async function animateShellPosition(
+  x: number,
+  y: number,
+  durationMs: number,
+): Promise<void> {
+  if (!inTauri()) {
+    return;
+  }
+  await invoke("animate_shell_position", { x, y, durationMs });
+}
+
 export async function setAnchor(anchor: { x: number; y: number }): Promise<void> {
   if (!inTauri()) {
     preview.anchor = anchor;

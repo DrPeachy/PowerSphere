@@ -48,6 +48,8 @@ pub fn run() {
             commands::cursor_position,
             commands::set_hit_rects,
             commands::set_pointer_hold,
+            commands::set_input_suspended,
+            commands::animate_shell_position,
             commands::run_item,
         ])
         .run(tauri::generate_context!())
