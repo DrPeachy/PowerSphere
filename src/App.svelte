@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import AddPanel from "./lib/AddPanel.svelte";
   import MainJewel from "./lib/MainJewel.svelte";
   import FillPanel from "./lib/FillPanel.svelte";
@@ -46,7 +46,16 @@
   import { normalizeStyle, resolveGlyph } from "./lib/jewel";
   import { mergePlaceholders, parseTemplate } from "./lib/template";
   import type { AppSnapshot, Bucket, ToolItem } from "./lib/types";
-  import { defaultAnchor, installMoveSaver, readCursor, readWorkArea, setDragLock, syncWindow } from "./lib/window";
+  import {
+    bumpShellEpoch,
+    defaultAnchor,
+    installMoveSaver,
+    noteShellApplied,
+    readCursor,
+    readWorkArea,
+    setDragLock,
+    syncWindow,
+  } from "./lib/window";
 
   const fallbackBuckets: Bucket[] = [
     { id: "navigation", name: "导航", items: [] },
@@ -552,7 +561,7 @@
     cursorBusy = true;
     try {
       const cursor = await readCursor();
-      if (!cursor || drag !== current || !current.moved) {
+      if (!cursor || snapping || drag !== current || !current.moved) {
         return;
       }
       anchor.x = cursor.x - current.grabX;
@@ -561,7 +570,7 @@
       cursorBusy = false;
       if (cursorAgain) {
         cursorAgain = false;
-        if (drag?.moved && drag.os) {
+        if (!snapping && drag?.moved && drag.os) {
           void pullCursor();
         }
       }
@@ -683,7 +692,7 @@
   }
 
   function onMainPointerMove(event: PointerEvent) {
-    if (!drag || event.pointerId !== drag.pointerId) {
+    if (snapping || !drag || event.pointerId !== drag.pointerId) {
       return;
     }
     drag.lastSx = event.screenX;
@@ -742,6 +751,33 @@
     return 1 - (1 - t) ** 3;
   }
 
+  function slidePin(dx: number, dy: number): { stop: () => void } {
+    let stopped = false;
+    const start = performance.now();
+    const step = (now: number) => {
+      if (stopped) {
+        return;
+      }
+      const t = Math.min(1, (now - start) / snapGlideMs);
+      const remain = 1 - easeOut(t);
+      pinX = dx * remain;
+      pinY = dy * remain;
+      pin = { x: pinX, y: pinY };
+      if (t < 1) {
+        requestAnimationFrame(step);
+      }
+    };
+    requestAnimationFrame(step);
+    return {
+      stop: () => {
+        stopped = true;
+        pinX = 0;
+        pinY = 0;
+        pin = { x: 0, y: 0 };
+      },
+    };
+  }
+
   function glidePreview(from: { x: number; y: number }, to: { x: number; y: number }): Promise<void> {
     return new Promise((resolve) => {
       const start = performance.now();
@@ -762,6 +798,8 @@
 
   async function finishDrag() {
     const release = { x: anchor.x, y: anchor.y };
+    let motion: { stop: () => void } | null = null;
+    let settled = false;
     try {
       if (!preview) {
         await setInputSuspended(true);
@@ -771,24 +809,85 @@
         }
       }
       const snapped = snapAnchor(release, work, metrics.snapInset, metrics.main / 2);
-      const distance = Math.hypot(snapped.x - release.x, snapped.y - release.y);
-      if (distance >= 1 && preview) {
-        await glidePreview(release, snapped);
-      } else if (distance >= 1) {
-        await syncWindow(layout, release, true);
-        const target = windowOrigin(layout, snapped);
-        await animateShellPosition(target.x, target.y, snapGlideMs);
+      const nextPlacement = choosePlacement(snapped, work, buckets.length + 1, metrics);
+      const previous = {
+        cx: layout.mainCx,
+        cy: layout.mainCy,
+        w: layout.width,
+        h: layout.height,
+      };
+      lockedPlacement = nextPlacement;
+      if (preview) {
+        const distance = Math.hypot(snapped.x - release.x, snapped.y - release.y);
+        if (distance >= 1) {
+          await glidePreview(release, snapped);
+        }
+        anchor.x = snapped.x;
+        anchor.y = snapped.y;
+        lockedPlacement = null;
+        await setAnchor({ x: snapped.x, y: snapped.y }).catch(() => {});
+        settled = true;
+        return;
       }
+      const next = layout;
+      const dx = previous.cx - next.mainCx;
+      const dy = previous.cy - next.mainCy;
+      const offset = Math.hypot(dx, dy);
+      const target = windowOrigin(next, snapped);
+      const windowDelta = Math.hypot(
+        target.x - (release.x - previous.cx),
+        target.y - (release.y - previous.cy),
+      );
+      const glide = windowDelta >= 1 || offset >= 1;
+      pinX = dx;
+      pinY = dy;
+      pin = { x: dx, y: dy };
+      await tick();
+      const epoch = bumpShellEpoch();
+      if (offset >= 1) {
+        motion = slidePin(dx, dy);
+      }
+      await animateShellPosition({
+        x: target.x,
+        y: target.y,
+        width: next.width,
+        height: next.height,
+        durationMs: glide ? snapGlideMs : 1,
+        epoch,
+      });
+      motion?.stop();
+      motion = null;
+      pinX = 0;
+      pinY = 0;
+      pin = { x: 0, y: 0 };
       anchor.x = snapped.x;
       anchor.y = snapped.y;
       lockedPlacement = null;
-      await setAnchor({ x: snapped.x, y: snapped.y }).catch(() => {});
-      if (!preview) {
-        const preserveClient = !placed || (placed.cx === layout.mainCx && placed.cy === layout.mainCy);
-        await syncWindow(layout, { x: snapped.x, y: snapped.y }, preserveClient);
+      const finalLayout = layout;
+      const sameGeometry =
+        finalLayout.mainCx === next.mainCx &&
+        finalLayout.mainCy === next.mainCy &&
+        finalLayout.width === next.width &&
+        finalLayout.height === next.height;
+      if (!sameGeometry) {
+        lockedPlacement = nextPlacement;
       }
+      const settledLayout = sameGeometry ? finalLayout : next;
+      placed = {
+        cx: settledLayout.mainCx,
+        cy: settledLayout.mainCy,
+        w: settledLayout.width,
+        h: settledLayout.height,
+      };
+      noteShellApplied(settledLayout, snapped);
+      await setAnchor({ x: snapped.x, y: snapped.y }).catch(() => {});
+      settled = true;
     } finally {
-      if (lockedPlacement) {
+      motion?.stop();
+      if (!settled) {
+        pinX = 0;
+        pinY = 0;
+        pin = { x: 0, y: 0 };
         lockedPlacement = null;
       }
       snapping = false;

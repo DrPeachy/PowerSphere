@@ -212,6 +212,7 @@ export async function setShellBounds(bounds: {
   width: number;
   height: number;
   preserveClient: boolean;
+  epoch: number;
 }): Promise<void> {
   if (!inTauri()) {
     return;
@@ -247,15 +248,18 @@ export async function setInputSuspended(suspended: boolean): Promise<void> {
   await invoke("set_input_suspended", { suspended });
 }
 
-export async function animateShellPosition(
-  x: number,
-  y: number,
-  durationMs: number,
-): Promise<void> {
+export async function animateShellPosition(bounds: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  durationMs: number;
+  epoch: number;
+}): Promise<void> {
   if (!inTauri()) {
     return;
   }
-  await invoke("animate_shell_position", { x, y, durationMs });
+  await invoke("animate_shell_position", { ...bounds });
 }
 
 export async function setAnchor(anchor: { x: number; y: number }): Promise<void> {

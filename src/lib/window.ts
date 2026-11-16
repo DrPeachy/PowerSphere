@@ -8,7 +8,10 @@ interface ShellBounds {
   width: number;
   height: number;
   preserveClient: boolean;
+  epoch: number;
 }
+
+let shellEpoch = 0;
 
 let dragLock = false;
 let suppressMoves = 0;
@@ -42,7 +45,20 @@ function shellBounds(layout: Layout, anchor: Anchor, preserveClient: boolean): S
     width: layout.width,
     height: layout.height,
     preserveClient,
+    epoch: shellEpoch,
   };
+}
+
+/** Drop queued window moves and invalidate commands already in flight. */
+export function bumpShellEpoch(): number {
+  shellEpoch += 1;
+  pending = null;
+  return shellEpoch;
+}
+
+/** Remember a position Rust already applied so the page does not move the window again. */
+export function noteShellApplied(layout: Layout, anchor: Anchor): void {
+  applied = shellBounds(layout, anchor, true);
 }
 
 function rememberMove(): void {
@@ -78,7 +94,9 @@ function pump(): void {
   void setShellBounds(bounds)
     .catch(() => {})
     .finally(() => {
-      applied = bounds;
+      if (bounds.epoch === shellEpoch) {
+        applied = bounds;
+      }
       inflight = false;
       rememberMove();
       if (pending) {
@@ -98,7 +116,7 @@ export function syncWindow(layout: Layout, anchor: Anchor, preserveClient = true
     return Promise.resolve();
   }
   const next = shellBounds(layout, anchor, preserveClient);
-  if (applied && sameBounds(applied, next) && !pending && !inflight) {
+  if (applied && sameBounds(applied, next) && !pending) {
     return Promise.resolve();
   }
   pending = next;
