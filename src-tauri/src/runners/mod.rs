@@ -1,5 +1,6 @@
 use crate::runner::RunnerRegistry;
 
+mod bat;
 mod command;
 mod open_path;
 
@@ -17,4 +18,5 @@ mod open_path;
 pub fn register_builtins(registry: &mut RunnerRegistry) {
     registry.register(Box::new(open_path::OpenPathRunner));
     registry.register(Box::new(command::CommandRunner));
+    registry.register(Box::new(bat::BatRunner));
 }
