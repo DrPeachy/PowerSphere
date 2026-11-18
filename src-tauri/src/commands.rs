@@ -45,10 +45,13 @@ pub fn add_bucket(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
+    icon: Option<String>,
 ) -> Result<AppSnapshot, String> {
     ensure_writable(&state)?;
     let mut config = state::lock(&state.config).clone();
-    config.add_bucket(&name).map_err(|err| err.to_string())?;
+    config
+        .add_bucket(&name, icon)
+        .map_err(|err| err.to_string())?;
     commit(&app, &state, config)
 }
 

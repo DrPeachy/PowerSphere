@@ -35,6 +35,7 @@ export interface ToolItem {
 export interface Bucket {
   id: string;
   name: string;
+  icon?: string;
   items: ToolItem[];
 }
 

@@ -19,6 +19,7 @@
     "pnpm": ">=10"
   },
   "dependencies": {
+    "@lucide/svelte": "^1.74.0",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.7.0"
   },

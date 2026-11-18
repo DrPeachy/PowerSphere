@@ -1,5 +1,6 @@
 <script lang="ts">
   import { addBucket, addTool, messageFrom, pickPath, removeTool, updateTool } from "./api";
+  import IconPicker from "./IconPicker.svelte";
   import { mergePlaceholders, type PlaceholderSpec } from "./template";
   import { SHELLS, type AppSnapshot, type ToolItem } from "./types";
 
@@ -26,6 +27,7 @@
   let command = $state("");
   let icon = $state("");
   let bucketName = $state("");
+  let bucketIcon = $state("");
   let bucketId = $state("");
   let kinds = $state<Record<string, "text" | "file">>({});
   let busy = $state(false);
@@ -102,8 +104,9 @@
     error = null;
     try {
       if (!editing && kind === "bucket") {
-        const next = await addBucket(bucketName);
+        const next = await addBucket(bucketName, bucketIcon);
         bucketName = "";
+        bucketIcon = "";
         onChange(next);
         onNotice("已添加分组");
         return;
@@ -205,6 +208,10 @@
       <span>分组名称</span>
       <input bind:value={bucketName} maxlength="40" placeholder="例如：开发" />
     </label>
+    <label class="field">
+      <span>图标</span>
+      <IconPicker bind:value={bucketIcon} />
+    </label>
   {:else}
     <label class="field">
       <span>名称</span>
@@ -212,7 +219,7 @@
     </label>
     <label class="field">
       <span>图标</span>
-      <input bind:value={icon} maxlength="4" placeholder="一个字或 emoji，可留空" />
+      <IconPicker bind:value={icon} />
     </label>
     {#if kind === "open-path"}
       <label class="field">

@@ -187,6 +187,8 @@ pub struct PlaceholderSpec {
 pub struct Bucket {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     #[serde(default)]
     pub items: Vec<ToolItem>,
 }
@@ -251,7 +253,7 @@ impl AppConfig {
         }
     }
 
-    pub fn add_bucket(&mut self, name: &str) -> Result<String, ConfigError> {
+    pub fn add_bucket(&mut self, name: &str, icon: Option<String>) -> Result<String, ConfigError> {
         let name = name.trim();
         if name.is_empty() {
             return Err(ConfigError::Invalid("分组名称不能为空".into()));
@@ -263,6 +265,7 @@ impl AppConfig {
         self.buckets.push(Bucket {
             id: id.clone(),
             name: name.to_string(),
+            icon: clean_icon(icon)?,
             items: Vec::new(),
         });
         Ok(id)
@@ -483,11 +486,13 @@ fn default_buckets() -> Vec<Bucket> {
         Bucket {
             id: "navigation".into(),
             name: "导航".into(),
+            icon: None,
             items: Vec::new(),
         },
         Bucket {
             id: "command".into(),
             name: "指令".into(),
+            icon: None,
             items: Vec::new(),
         },
     ]
@@ -505,6 +510,7 @@ fn validate_config(config: &AppConfig) -> Result<(), ConfigError> {
         if bucket.id.trim().is_empty() || bucket.name.trim().is_empty() {
             return Err(ConfigError::Invalid("分组的 id 和 name 不能为空".into()));
         }
+        clean_icon(bucket.icon.clone())?;
         if !bucket_ids.insert(bucket.id.clone()) {
             return Err(ConfigError::Invalid(format!("分组 id 重复：{}", bucket.id)));
         }
@@ -566,17 +572,31 @@ fn is_batch_path(path: &str) -> bool {
     lower.ends_with(".bat") || lower.ends_with(".cmd")
 }
 
-fn insert_icon(params: &mut Map<String, Value>, icon: Option<String>) -> Result<(), ConfigError> {
+fn clean_icon(icon: Option<String>) -> Result<Option<String>, ConfigError> {
     let Some(icon) = icon
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
     else {
-        return Ok(());
+        return Ok(None);
     };
-    if icon.chars().count() > 4 {
-        return Err(ConfigError::Invalid("图标最多 4 个字符".into()));
+    let count = icon.chars().count();
+    let kebab = count <= 32
+        && !icon.starts_with('-')
+        && !icon.ends_with('-')
+        && !icon.contains("--")
+        && icon
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+    if kebab || count <= 4 {
+        return Ok(Some(icon));
     }
-    params.insert("icon".into(), Value::String(icon));
+    Err(ConfigError::Invalid("图标名称无效".into()))
+}
+
+fn insert_icon(params: &mut Map<String, Value>, icon: Option<String>) -> Result<(), ConfigError> {
+    if let Some(icon) = clean_icon(icon)? {
+        params.insert("icon".into(), Value::String(icon));
+    }
     Ok(())
 }
 
@@ -698,6 +718,44 @@ mod tests {
         .unwrap();
         assert_eq!(weird.style.sphere_style, "glass");
         assert_eq!(weird.style.center_glyph, None);
+    }
+
+    #[test]
+    fn named_icons_persist_and_old_configs_still_load() {
+        let bare =
+            parse_config(r#"{ "schemaVersion": 1, "buckets": [{ "id": "a", "name": "导航" }] }"#)
+                .unwrap();
+        assert_eq!(bare.buckets[0].icon, None);
+        let named = parse_config(
+            r#"{ "schemaVersion": 1, "buckets": [{ "id": "a", "name": "导航", "icon": "folder", "items": [{ "id": "i", "label": "merge", "type": "command", "shell": "git-bash", "command": "git merge main", "icon": "git-merge" }] }] }"#,
+        )
+        .unwrap();
+        assert_eq!(named.buckets[0].icon.as_deref(), Some("folder"));
+        assert_eq!(
+            named.buckets[0].items[0]
+                .params
+                .get("icon")
+                .and_then(|value| value.as_str()),
+            Some("git-merge")
+        );
+        let saved = NewTool::OpenPath {
+            label: "脚本".into(),
+            target: "C:\\tools\\run.bat".into(),
+            icon: Some("terminal".into()),
+        }
+        .into_item()
+        .unwrap();
+        assert_eq!(
+            saved.params.get("icon").and_then(|value| value.as_str()),
+            Some("terminal")
+        );
+        let rejected = NewTool::OpenPath {
+            label: "太长".into(),
+            target: "C:\\a".into(),
+            icon: Some("not a valid icon name".into()),
+        }
+        .into_item();
+        assert!(rejected.is_err());
     }
 
     #[test]

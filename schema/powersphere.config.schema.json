@@ -72,6 +72,10 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1 },
+        "icon": {
+          "type": "string",
+          "description": "可选图标名。省略则按名称自动选择，选不中就用首字。"
+        },
         "items": {
           "type": "array",
           "items": { "$ref": "#/$defs/item" }
@@ -114,7 +118,10 @@
                 "minLength": 1,
                 "description": "文件、文件夹、可执行文件或 URL。支持 %ENV% 与 ${ENV}。"
               },
-              "icon": { "type": "string" }
+              "icon": {
+                "type": "string",
+                "description": "可选图标名。省略则按名称或路径自动选择，选不中就用首字。旧的短字符图标仍然有效。"
+              }
             }
           }
         },
@@ -136,7 +143,10 @@
                 "minLength": 1,
                 "description": "命令模板。用 {branch} 或 {apk:file} 标记每次运行要填写的参数。"
               },
-              "icon": { "type": "string" },
+              "icon": {
+                "type": "string",
+                "description": "可选图标名。省略则按名称或路径自动选择，选不中就用首字。旧的短字符图标仍然有效。"
+              },
               "placeholders": {
                 "type": "array",
                 "items": { "$ref": "#/$defs/placeholder" }
@@ -165,7 +175,10 @@
                 "type": "string",
                 "description": "可选参数，原样接在脚本路径后面。"
               },
-              "icon": { "type": "string" }
+              "icon": {
+                "type": "string",
+                "description": "可选图标名。省略则按名称或路径自动选择，选不中就用首字。旧的短字符图标仍然有效。"
+              }
             }
           }
         }

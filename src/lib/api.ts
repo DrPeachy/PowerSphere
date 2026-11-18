@@ -79,16 +79,22 @@ export async function getSnapshot(): Promise<AppSnapshot> {
   return invoke<AppSnapshot>("get_snapshot");
 }
 
-export async function addBucket(name: string): Promise<AppSnapshot> {
+export async function addBucket(name: string, icon?: string): Promise<AppSnapshot> {
+  const storedIcon = icon?.trim() || undefined;
   if (!inTauri()) {
     const trimmed = name.trim();
     if (!trimmed) {
       throw new Error("分组名称不能为空");
     }
-    preview.buckets.push({ id: `bucket-preview-${previewSeq++}`, name: trimmed, items: [] });
+    preview.buckets.push({
+      id: `bucket-preview-${previewSeq++}`,
+      name: trimmed,
+      icon: storedIcon,
+      items: [],
+    });
     return previewSnapshot();
   }
-  return invoke<AppSnapshot>("add_bucket", { name });
+  return invoke<AppSnapshot>("add_bucket", { name, icon: storedIcon ?? null });
 }
 
 export async function addTool(bucketId: string, tool: NewTool): Promise<AppSnapshot> {

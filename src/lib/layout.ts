@@ -228,8 +228,9 @@ export function computeLayout(
       kind: "bucket" as const,
       bucketId: bucket.id,
       label: bucket.name,
+      icon: bucket.icon,
     })),
-    { key: "settings", kind: "settings" as const, bucketId: "settings", label: "设置" },
+    { key: "settings", kind: "settings" as const, bucketId: "settings", label: "设置", icon: undefined },
   ];
   const children = entries.map((entry, index) => {
     const center = childCenter(index, placement.along, metrics.main / 2, child / 2, metrics);
@@ -256,6 +257,7 @@ export function computeLayout(
       kind: entry.kind,
       bucketId: entry.bucketId,
       label: entry.label,
+      icon: entry.icon,
       left: 0,
       top: 0,
       size: entry.size,

@@ -31,7 +31,6 @@
     choosePlacement,
     computeLayout,
     hitShapes,
-    mark,
     metricsFrom,
     pinShift,
     snapAnchor,
@@ -43,6 +42,7 @@
     type WorkArea,
   } from "./lib/layout";
   import { setGlassAway, setGlassDrag } from "./lib/glassGl";
+  import SphereMark from "./lib/SphereMark.svelte";
   import { normalizeStyle, resolveGlyph } from "./lib/jewel";
   import { mergePlaceholders, parseTemplate } from "./lib/template";
   import type { AppSnapshot, Bucket, ToolItem } from "./lib/types";
@@ -907,6 +907,17 @@
     togglePanel();
   }
 
+  function sphereHint(node: SphereNode): string {
+    if (node.kind !== "action" || !node.bucketId || !node.itemId) {
+      return node.label;
+    }
+    const item = findOwned(node.bucketId, node.itemId);
+    if (!item) {
+      return node.label;
+    }
+    return [item.label, item.target, item.command, item.type, item.shell].filter(Boolean).join(" ");
+  }
+
   function findOwned(bucketId: string, itemId: string): ToolItem | undefined {
     return findItem(buckets, bucketId, itemId);
   }
@@ -1189,7 +1200,7 @@
               <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6.2 6.2l1.6 1.6M16.2 16.2l1.6 1.6M17.8 6.2l-1.6 1.6M7.8 16.2l-1.6 1.6" />
             </svg>
           {:else}
-            <span class="glyph">{node.icon || mark(node.label)}</span>
+            <SphereMark icon={node.icon} label={node.label} hint={sphereHint(node)} />
           {/if}
         </button>
         <span class="caption" class:above={layout.labelAbove}>{node.label}</span>
