@@ -11,7 +11,9 @@ fn shell_guard() -> MutexGuard<'static, ()> {
 }
 
 use crate::autostart;
-use crate::config::{self, Anchor, AppConfig, NewTool, PlaceholderSpec, StyleSettings, ToolItem};
+use crate::config::{
+    self, Anchor, AppConfig, ClockSettings, NewTool, PlaceholderSpec, StyleSettings, ToolItem,
+};
 use crate::host::TauriHost;
 use crate::paths::detect_git_bash;
 use crate::runner::{RunContext, RunOutput};
@@ -135,6 +137,17 @@ pub fn update_style(
     commit(&app, &state, config)
 }
 
+#[tauri::command]
+pub fn update_clock(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    clock: ClockSettings,
+) -> Result<AppSnapshot, String> {
+    ensure_writable(&state)?;
+    let mut config = state::lock(&state.config).clone();
+    config.clock = clock.normalized();
+    commit(&app, &state, config)
+}
 #[tauri::command]
 pub fn set_shell_bounds(
     window: tauri::WebviewWindow,

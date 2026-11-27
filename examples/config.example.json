@@ -11,6 +11,10 @@
     "animationMs": 220,
     "unfocusedOpacity": 0.38
   },
+  "clock": {
+    "enabled": true,
+    "timezone": "local"
+  },
   "buckets": [
     {
       "id": "navigation",

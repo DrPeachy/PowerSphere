@@ -86,6 +86,27 @@ fn default_unfocused_opacity() -> f64 {
     0.38
 }
 
+fn default_clock_enabled() -> bool {
+    true
+}
+
+fn default_clock_timezone() -> String {
+    "local".into()
+}
+
+/// Accepts "local" or an IANA-style zone name such as "Asia/Shanghai".
+/// Anything else falls back to "local" so a typo cannot blank the clock.
+fn known_timezone(value: &str) -> bool {
+    if value == "local" {
+        return true;
+    }
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '-' | '+'))
+}
+
 fn default_text_kind() -> String {
     "text".into()
 }
@@ -106,6 +127,8 @@ pub struct AppConfig {
     pub anchor: Option<Anchor>,
     #[serde(default)]
     pub style: StyleSettings,
+    #[serde(default)]
+    pub clock: ClockSettings,
     pub buckets: Vec<Bucket>,
     #[serde(default, rename = "$schema", skip_serializing_if = "Option::is_none")]
     pub schema_doc: Option<String>,
@@ -167,6 +190,34 @@ impl StyleSettings {
             .is_some_and(|glyph| !known_glyph(glyph))
         {
             self.center_glyph = None;
+        }
+        self
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClockSettings {
+    #[serde(default = "default_clock_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_clock_timezone")]
+    pub timezone: String,
+}
+
+impl Default for ClockSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_clock_enabled(),
+            timezone: default_clock_timezone(),
+        }
+    }
+}
+
+impl ClockSettings {
+    pub fn normalized(mut self) -> Self {
+        self.timezone = self.timezone.trim().to_string();
+        if !known_timezone(&self.timezone) {
+            self.timezone = default_clock_timezone();
         }
         self
     }
@@ -248,6 +299,7 @@ impl AppConfig {
             git_bash_path: None,
             anchor: None,
             style: StyleSettings::default(),
+            clock: ClockSettings::default(),
             buckets: default_buckets(),
             schema_doc: None,
         }

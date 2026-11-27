@@ -44,6 +44,23 @@
         }
       }
     },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "主球下方的时间显示。省略时默认开启并跟随系统时区。",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否显示时间。默认开启。"
+        },
+        "timezone": {
+          "type": "string",
+          "default": "local",
+          "description": "\"local\" 表示跟随系统时区；否则为 IANA 时区名，例如 Asia/Shanghai。"
+        }
+      }
+    },
     "anchor": {
       "description": "主球体中心的屏幕逻辑坐标。null 表示首次启动时放到工作区右侧。",
       "anyOf": [

@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { updateSettings, updateStyle } from "./api";
+  import { updateClock, updateSettings, updateStyle } from "./api";
   import { GLYPHS, SPHERE_STYLES, defaultGlyph, normalizeGlyph, normalizeStyle } from "./jewel";
   import MainJewel from "./MainJewel.svelte";
+  import { TIMEZONES } from "./types";
   import type { AppSnapshot, StyleSettings } from "./types";
 
   let {
@@ -33,6 +34,8 @@
   let glyphChoice = $state<string | null>(null);
   let autostart = $state(true);
   let gitBashPath = $state("");
+  let clockEnabled = $state(true);
+  let clockTimezone = $state("local");
   let error = $state<string | null>(null);
   let seeded = false;
   let styleTicket = 0;
@@ -50,6 +53,8 @@
     glyphChoice = current.centerGlyph ?? null;
     autostart = snapshot.config.autostart;
     gitBashPath = snapshot.config.gitBashPath ?? "";
+    clockEnabled = snapshot.config.clock?.enabled ?? true;
+    clockTimezone = snapshot.config.clock?.timezone ?? "local";
     seeded = true;
   });
 
@@ -131,6 +136,21 @@
       error = cause instanceof Error ? cause.message : "保存失败";
     }
   }
+
+  async function persistClock(next?: { enabled?: boolean; timezone?: string }) {
+    if (next?.enabled !== undefined) {
+      clockEnabled = next.enabled;
+    }
+    if (next?.timezone !== undefined) {
+      clockTimezone = next.timezone;
+    }
+    error = null;
+    try {
+      onChange(await updateClock({ enabled: clockEnabled, timezone: clockTimezone }));
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : "保存失败";
+    }
+  }
 </script>
 
 <div class="panel-head">
@@ -171,6 +191,30 @@
     {/each}
   </div>
 </label>
+<label class="check">
+    <input
+      type="checkbox"
+      checked={clockEnabled}
+      onchange={(event) => persistClock({ enabled: (event.currentTarget as HTMLInputElement).checked })}
+    />
+  显示时间
+</label>
+<label class="field">
+  <span>时区</span>
+  <select
+    value={clockTimezone}
+    disabled={!clockEnabled}
+    onchange={(event) => persistClock({ timezone: (event.currentTarget as HTMLSelectElement).value })}
+  >
+    {#if !TIMEZONES.some((zone) => zone.id === clockTimezone)}
+      <option value={clockTimezone}>{clockTimezone}</option>
+    {/if}
+    {#each TIMEZONES as zone (zone.id)}
+      <option value={zone.id}>{zone.label}</option>
+    {/each}
+  </select>
+</label>
+<p class="hint">时间显示在主球正下方。展开分组时会淡出，松开后回来。</p>
 <label class="field">
   <span>贴边距离 {snapInset}px</span>
     <input data-key="snapInset" type="range" min="0" max="80" bind:value={snapInset} oninput={persistStyle} />

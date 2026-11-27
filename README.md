@@ -82,6 +82,19 @@ JSON Schema 在 [`schema/powersphere.config.schema.json`](schema/powersphere.con
 
 路径里可以写 `%USERPROFILE%` 或 `${USERPROFILE}`。Git Bash 的工作目录会转成 MSYS 路径（`C:\Users\me` 变成 `/c/Users/me`），因为 `bash -lc` 可能会把进程的当前目录重置掉。
 
+### 时间显示
+
+主球正下方会显示一个当前时间。设置球里的「显示时间」开关和「时区」选择会写进配置的 `clock` 字段：
+
+```json
+"clock": {
+  "enabled": true,
+  "timezone": "Asia/Shanghai"
+}
+```
+
+`timezone` 写 `"local"` 表示跟随系统；也可以填 IANA 时区名，例如 `Asia/Shanghai` 或 `America/Los_Angeles`。省略 `clock` 时默认开启并跟随系统，认不出来的时区名会退回 `"local"`。展开分组时时间会淡出，松开后回来。
+
 ### 打开文件夹
 
 ```json

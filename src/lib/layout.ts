@@ -56,6 +56,8 @@ export interface Layout {
   mainCy: number;
   nodes: SphereNode[];
   panel: PanelBox | null;
+  /** Time readout under the main sphere. null when the clock is turned off. */
+  clock: PanelBox | null;
   labelAbove: boolean;
 }
 
@@ -204,6 +206,10 @@ const CAPTION_WIDTH = 76;
 const CAPTION_GAP = 2;
 const MAIN_HIT_MARGIN = 8;
 const CHILD_HIT_MARGIN = 4;
+/** Matches `.clock` in app.css. Reserves room for the time readout under the main sphere. */
+const CLOCK_WIDTH = 108;
+const CLOCK_HEIGHT = 24;
+const CLOCK_GAP = 6;
 
 export function computeLayout(
   buckets: Bucket[],
@@ -212,6 +218,7 @@ export function computeLayout(
   panel: PanelSize | null,
   metrics: Metrics,
   placement: Placement,
+  clockEnabled: boolean,
 ): Layout {
   const child = bucketSize(metrics);
   const action = actionSize(metrics);
@@ -301,6 +308,14 @@ export function computeLayout(
     RESERVED_PANEL.w,
     RESERVED_PANEL.h,
   );
+  const clockBox = clockEnabled
+    ? {
+        x: -CLOCK_WIDTH / 2,
+        y: metrics.main / 2 + CLOCK_GAP,
+        w: CLOCK_WIDTH,
+        h: CLOCK_HEIGHT,
+      }
+    : null;
 
   let minX = Infinity;
   let minY = Infinity;
@@ -335,6 +350,9 @@ export function computeLayout(
     }
   }
   grow(reservedPanel.x, reservedPanel.y, reservedPanel.x + reservedPanel.w, reservedPanel.y + reservedPanel.h);
+  if (clockBox) {
+    grow(clockBox.x, clockBox.y, clockBox.x + clockBox.w, clockBox.y + clockBox.h);
+  }
   minX -= metrics.pad;
   minY -= metrics.pad;
   maxX += metrics.pad;
@@ -367,6 +385,14 @@ export function computeLayout(
           top: panelBox.y - minY,
           w: panelBox.w,
           h: panelBox.h,
+        }
+      : null,
+    clock: clockBox
+      ? {
+          left: clockBox.x - minX,
+          top: clockBox.y - minY,
+          w: clockBox.w,
+          h: clockBox.h,
         }
       : null,
     labelAbove,

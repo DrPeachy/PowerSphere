@@ -42,6 +42,7 @@ pub fn run() {
             commands::remove_tool,
             commands::update_settings,
             commands::update_style,
+            commands::update_clock,
             commands::run_filled,
             commands::set_anchor,
             commands::set_shell_bounds,

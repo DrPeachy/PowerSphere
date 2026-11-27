@@ -2,6 +2,7 @@
   import { onMount, tick } from "svelte";
   import AddPanel from "./lib/AddPanel.svelte";
   import MainJewel from "./lib/MainJewel.svelte";
+  import Clock from "./lib/Clock.svelte";
   import FillPanel from "./lib/FillPanel.svelte";
   import SettingsPanel from "./lib/SettingsPanel.svelte";
   import {
@@ -115,12 +116,14 @@
 
   let buckets = $derived(snapshot?.config.buckets ?? fallbackBuckets);
   let metrics = $derived(metricsFrom(snapshot?.config.style));
+  let clockOn = $derived(snapshot?.config.clock?.enabled ?? true);
+  let clockTimezone = $derived(snapshot?.config.clock?.timezone ?? "local");
   let placement = $derived(
     lockedPlacement ?? choosePlacement(anchor, work, buckets.length + 1, metrics),
   );
   let panelSize = $derived(
     settingsOpen
-      ? { w: 300, h: 560 }
+      ? { w: 300, h: 600 }
       : fill
         ? { w: 280, h: 320 }
         : editor
@@ -128,7 +131,7 @@
           : null,
   );
   let layout: Layout = $derived(
-    computeLayout(buckets, mode, activeBucketId, panelSize, metrics, placement),
+    computeLayout(buckets, mode, activeBucketId, panelSize, metrics, placement, clockOn),
   );
   let origin = $derived(windowOrigin(layout, anchor));
   let editingItem = $derived(findItem(buckets, editor?.bucketId, editor?.itemId));
@@ -1207,6 +1210,19 @@
       {/if}
     </div>
   {/each}
+
+  {#if layout.clock}
+    <div
+      class="clock"
+      class:away={mode !== "idle"}
+      style:left="{layout.clock.left}px"
+      style:top="{layout.clock.top}px"
+      style:width="{layout.clock.w}px"
+      style:height="{layout.clock.h}px"
+    >
+      <Clock timezone={clockTimezone} />
+    </div>
+  {/if}
 
   {#if notice}
     <p class="notice" style:left="{noticePos.left}px" style:top="{noticePos.top}px" style:transform={noticePos.transform}>{notice}</p>

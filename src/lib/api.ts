@@ -2,6 +2,7 @@ import { mergePlaceholders, parseTemplate, substituteCommand } from "./template"
 import type {
   AppConfig,
   AppSnapshot,
+  ClockSettings,
   NewTool,
   PlaceholderSpec,
   RunOutput,
@@ -20,6 +21,10 @@ const FALLBACK: AppConfig = {
     sphereSize: 64,
     animationMs: 220,
     unfocusedOpacity: 0.38,
+  },
+  clock: {
+    enabled: true,
+    timezone: "local",
   },
   buckets: [
     { id: "navigation", name: "导航", items: [] },
@@ -173,6 +178,14 @@ export async function updateStyle(style: StyleSettings): Promise<AppSnapshot> {
     return previewSnapshot();
   }
   return invoke<AppSnapshot>("update_style", { style });
+}
+
+export async function updateClock(clock: ClockSettings): Promise<AppSnapshot> {
+  if (!inTauri()) {
+    preview.clock = { ...clock };
+    return previewSnapshot();
+  }
+  return invoke<AppSnapshot>("update_clock", { clock });
 }
 
 let dialogDepth = 0;
