@@ -4,12 +4,12 @@ mod autostart;
 mod commands;
 mod config;
 mod host;
-#[cfg(windows)]
 mod interact;
 mod paths;
 mod plugins;
 mod runner;
 mod runners;
+mod shell;
 mod state;
 mod template;
 mod tray;
@@ -45,12 +45,12 @@ pub fn run() {
             commands::update_clock,
             commands::run_filled,
             commands::set_anchor,
-            commands::set_shell_bounds,
-            commands::cursor_position,
-            commands::set_hit_rects,
-            commands::set_pointer_hold,
-            commands::set_input_suspended,
-            commands::animate_shell_position,
+            shell::set_shell_bounds,
+            shell::cursor_position,
+            interact::set_hit_rects,
+            interact::set_pointer_hold,
+            interact::set_input_suspended,
+            shell::animate_shell_position,
             commands::run_item,
         ])
         .run(tauri::generate_context!())
