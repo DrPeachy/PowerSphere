@@ -29,19 +29,22 @@
     usedTargets,
   } from "./lib/fileDrop";
   import {
-    choosePlacement,
+    PANEL_SIZES,
     computeLayout,
     hitShapes,
     metricsFrom,
     pinShift,
-    snapAnchor,
     windowOrigin,
     type ClusterMode,
     type Layout,
-    type Placement,
     type SphereNode,
-    type WorkArea,
   } from "./lib/layout";
+  import {
+    choosePlacement,
+    snapAnchor,
+    type Placement,
+    type WorkArea,
+  } from "./lib/placement";
   import { setGlassAway, setGlassDrag } from "./lib/glassGl";
   import SphereMark from "./lib/SphereMark.svelte";
   import { normalizeStyle, resolveGlyph } from "./lib/jewel";
@@ -123,11 +126,11 @@
   );
   let panelSize = $derived(
     settingsOpen
-      ? { w: 300, h: 600 }
+      ? PANEL_SIZES.settings
       : fill
-        ? { w: 280, h: 320 }
+        ? PANEL_SIZES.fill
         : editor
-          ? { w: 300, h: 600 }
+          ? PANEL_SIZES.editor
           : null,
   );
   let layout: Layout = $derived(

@@ -1,0 +1,275 @@
+.inline .text-button {
+  width: auto;
+  flex: none;
+  white-space: nowrap;
+}
+
+.inline {
+  display: flex;
+  gap: 6px;
+}
+
+.inline input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: -2px 0 8px;
+}
+
+.chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 999px;
+  border: 0.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.template {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.danger {
+  width: 100%;
+  margin-top: 8px;
+  color: #ff9f8a;
+}
+
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--blue);
+}
+
+.panel {
+  position: absolute;
+  z-index: 5;
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 14px 14px 16px;
+  border-radius: 20px;
+  border: 0.5px solid var(--line);
+  background: rgba(28, 28, 30, 0.78);
+  color: var(--ink);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  animation: sphere-in 200ms var(--ease) backwards;
+}
+
+.panel h2,
+.panel h3 {
+  margin: 0;
+  font-weight: 650;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.icon-button,
+.text-button,
+.primary {
+  border-radius: 10px;
+  border: 0.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+.icon-button,
+.text-button {
+  padding: 2px 8px;
+}
+
+.primary {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: var(--blue);
+  color: white;
+  font-weight: 560;
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.modes button {
+  border-radius: 999px;
+  border: 0.5px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 5px 0;
+}
+
+.modes button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.field span {
+  color: rgba(235, 235, 245, 0.7);
+  font-size: 12px;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.icon-cell {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border-radius: 8px;
+  border: 0.5px solid transparent;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+}
+
+.icon-cell.auto {
+  grid-column: 1 / -1;
+  height: 26px;
+  font-size: 12px;
+}
+
+.icon-cell[aria-pressed="true"] {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.icon-cell svg {
+  width: 15px;
+  height: 15px;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  padding: 7px 8px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--blue);
+}
+
+textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.check input {
+  width: auto;
+}
+
+.hint,
+.error,
+.path {
+  margin: 4px 0 8px;
+  color: rgba(235, 235, 245, 0.62);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.error {
+  color: #ff9f8a;
+}
+
+.tools {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tool-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes sphere-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.94);
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.preview-stage {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  margin: 2px auto 12px;
+}
+
+.preview-stage .sphere.main {
+  inset: 20px;
+}
+
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.choice-row button {
+  border-radius: 999px;
+  border: 0.5px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.choice-row button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.18);
+}
